@@ -13,6 +13,11 @@ class MainView(ttk.Frame):
 
         self.current_mockup_image = None # Để giữ tham chiếu đến ảnh mockup
         self.current_design_image = None # Để giữ tham chiếu đến ảnh design
+        # Thuộc tính mới để lưu thông tin mockup trên canvas
+        self.displayed_mockup_width = 0
+        self.displayed_mockup_height = 0
+        self.displayed_mockup_offset_x = 0
+        self.displayed_mockup_offset_y = 0
 
         # --- Left Panel (Controls) ---
         left_panel = ttk.Frame(self, padding="5")
@@ -192,11 +197,16 @@ class MainView(ttk.Frame):
 
     # Placeholder cho các hàm vẽ lên canvas
     def draw_mockup_on_canvas(self, image_path):
-        self.preview_canvas.delete("mockup_image") # Xóa ảnh mockup cũ
+        self.preview_canvas.delete("mockup_image")
+        # Reset thông tin mockup hiển thị
+        self.displayed_mockup_width = 0
+        self.displayed_mockup_height = 0
+        self.displayed_mockup_offset_x = 0
+        self.displayed_mockup_offset_y = 0
+
         if image_path:
             try:
                 img = Image.open(image_path)
-                # Scale ảnh để vừa với canvas preview mà vẫn giữ tỷ lệ
                 canvas_width = self.preview_canvas.winfo_width()
                 canvas_height = self.preview_canvas.winfo_height()
 
@@ -204,11 +214,28 @@ class MainView(ttk.Frame):
                     self.parent.after(100, lambda: self.draw_mockup_on_canvas(image_path))
                     return
 
-                img.thumbnail((canvas_width, canvas_height), Image.Resampling.LANCZOS)
+                # Tạo bản sao để thumbnail không ảnh hưởng đến img gốc nếu cần sau này
+                img_for_thumb = img.copy()
+                img_for_thumb.thumbnail((canvas_width, canvas_height), Image.Resampling.LANCZOS)
                 
-                self.current_mockup_image = ImageTk.PhotoImage(img)
-                self.preview_canvas.create_image(0, 0, anchor=tk.NW, image=self.current_mockup_image, tags="mockup_image")
-                print(f"Drawing mockup: {image_path} with size {img.width}x{img.height}")
+                # Lưu kích thước thực của ảnh mockup sau khi thumbnail
+                self.displayed_mockup_width = img_for_thumb.width
+                self.displayed_mockup_height = img_for_thumb.height
+
+                # Tính toán offset để căn giữa ảnh trên canvas
+                self.displayed_mockup_offset_x = (canvas_width - self.displayed_mockup_width) // 2
+                self.displayed_mockup_offset_y = (canvas_height - self.displayed_mockup_height) // 2
+                
+                self.current_mockup_image = ImageTk.PhotoImage(img_for_thumb)
+                # Vẽ ảnh tại offset đã tính, không phải (0,0)
+                self.preview_canvas.create_image(
+                    self.displayed_mockup_offset_x, 
+                    self.displayed_mockup_offset_y, 
+                    anchor=tk.NW, 
+                    image=self.current_mockup_image, 
+                    tags="mockup_image"
+                )
+                # print(f"Drawing mockup: {image_path} at ({self.displayed_mockup_offset_x},{self.displayed_mockup_offset_y}) size {self.displayed_mockup_width}x{self.displayed_mockup_height}")
             except FileNotFoundError:
                 self.show_error("Image Error", f"Mockup image not found: {image_path}")
                 self.current_mockup_image = None
@@ -217,6 +244,7 @@ class MainView(ttk.Frame):
                 self.current_mockup_image = None
         else:
             self.current_mockup_image = None # Xóa tham chiếu
+            # Các giá trị displayed_mockup_* đã được reset ở đầu hàm
             print("Cleared mockup image from canvas")
 
     def draw_design_frame_on_canvas(self, x, y, width, height, design_image_path=None):

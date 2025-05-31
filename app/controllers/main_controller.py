@@ -135,46 +135,61 @@ class MainController:
         self.on_controls_changed() # Gọi hàm chung để cập nhật và vẽ lại
 
     def update_preview(self):
-        x_pos = self.view.x_var.get()
-        y_pos = self.view.y_var.get()
+        x_pos_percent = self.view.x_var.get()
+        y_pos_percent = self.view.y_var.get()
         frame_width_percent = self.view.size_var.get()
 
-        canvas_width = self.view.preview_canvas.winfo_width()
-        canvas_height = self.view.preview_canvas.winfo_height()
+        # Lấy kích thước và offset của ảnh mockup thực tế đang hiển thị trên canvas
+        displayed_mockup_w = self.view.displayed_mockup_width
+        displayed_mockup_h = self.view.displayed_mockup_height
+        displayed_mockup_offset_x = self.view.displayed_mockup_offset_x
+        displayed_mockup_offset_y = self.view.displayed_mockup_offset_y
 
-        if canvas_width <= 1 or canvas_height <= 1: 
-            self.view.after(100, self.update_preview)
+        if displayed_mockup_w <= 0 or displayed_mockup_h <= 0: # Nếu chưa có mockup nào được vẽ (hoặc đã clear)
+            # Xóa khung design nếu có
+            self.view.draw_design_frame_on_canvas(0,0,0,0, None)
+            # Không cần gọi after(100, self.update_preview) ở đây nữa vì không phụ thuộc canvas_width/height nữa
             return
 
-        actual_x = (x_pos / 100) * canvas_width
-        actual_y = (y_pos / 100) * canvas_height
-        frame_actual_width = (frame_width_percent / 100) * canvas_width
+        # Tính toán X, Y, Width của khung design dựa trên kích thước của *ảnh mockup hiển thị*
+        actual_x_on_mockup = (x_pos_percent / 100) * displayed_mockup_w
+        actual_y_on_mockup = (y_pos_percent / 100) * displayed_mockup_h
+        frame_actual_width_on_mockup = (frame_width_percent / 100) * displayed_mockup_w
         
         aspect_ratio = self.config_manager.get_aspect_ratio()
-        frame_actual_height = frame_actual_width / aspect_ratio 
+        frame_actual_height_on_mockup = frame_actual_width_on_mockup / aspect_ratio
 
-        if actual_y + frame_actual_height > canvas_height:
-            frame_actual_height = canvas_height - actual_y
-            frame_actual_width = frame_actual_height * aspect_ratio
+        # Giữ logic clamp (nếu cần) so với displayed_mockup_w/h, nhưng có thể không cần thiết nếu X,Y,Size luôn là 0-100%
+        # Ví dụ, nếu X=100% và Size=10%, khung sẽ bắt đầu ở cạnh phải và rộng 10% mockup.
+        # Clamp đơn giản nếu vượt quá:
+        if actual_y_on_mockup + frame_actual_height_on_mockup > displayed_mockup_h:
+            frame_actual_height_on_mockup = displayed_mockup_h - actual_y_on_mockup
+            frame_actual_width_on_mockup = frame_actual_height_on_mockup * aspect_ratio
         
-        if actual_x + frame_actual_width > canvas_width:
-            frame_actual_width = canvas_width - actual_x
-            frame_actual_height = frame_actual_width / aspect_ratio
+        if actual_x_on_mockup + frame_actual_width_on_mockup > displayed_mockup_w:
+            frame_actual_width_on_mockup = displayed_mockup_w - actual_x_on_mockup
+            frame_actual_height_on_mockup = frame_actual_width_on_mockup / aspect_ratio
+
+        # Tọa độ cuối cùng trên canvas = offset của mockup + tọa độ trên mockup
+        final_x_on_canvas = displayed_mockup_offset_x + actual_x_on_mockup
+        final_y_on_canvas = displayed_mockup_offset_y + actual_y_on_mockup
 
         selected_design_name = self.view.get_selected_design()
         design_image_path = None
-        # Chỉ tạo đường dẫn design nếu một design cụ thể được chọn
         if selected_design_name and selected_design_name != "All Designs":
             design_image_path = os.path.join(self.designs_dir, selected_design_name)
 
-        # Kiểm tra xem có mockup nào được chọn không (trừ "All Mockups")
-        # Chỉ vẽ khung design nếu có mockup đang hiển thị (không phải "All Mockups")
         current_mockup = self.view.get_selected_mockup()
         if current_mockup and current_mockup != "All Mockups":
-            self.view.draw_design_frame_on_canvas(actual_x, actual_y, frame_actual_width, frame_actual_height, design_image_path)
+            self.view.draw_design_frame_on_canvas(
+                final_x_on_canvas, 
+                final_y_on_canvas, 
+                frame_actual_width_on_mockup, 
+                frame_actual_height_on_mockup, 
+                design_image_path
+            )
         else:
-            # Nếu "All Mockups" được chọn hoặc không có mockup nào, xóa khung design/design
-            self.view.draw_design_frame_on_canvas(0, 0, 0, 0, None) # Hoặc một cách clear khác
+            self.view.draw_design_frame_on_canvas(0, 0, 0, 0, None)
 
     def load_mockup_config(self, mockup_name):
         config = self.config_manager.get_mockup_config(mockup_name)
