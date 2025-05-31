@@ -6,13 +6,30 @@ from app.models.config_manager import ConfigManager
 from app.controllers.main_controller import MainController
 
 def resource_path(relative_path):
-    """ Lấy đường dẫn tuyệt đối đến tài nguyên, hoạt động cho dev và cho PyInstaller """
-    try:
-        # PyInstaller tạo thư mục tạm và lưu đường dẫn trong _MEIPASS
-        base_path = sys._MEIPASS
-    except AttributeError: # Sửa lỗi AttributeError nếu _MEIPASS không tồn tại
+    """ Lấy đường dẫn tuyệt đối đến tài nguyên. """
+    # print(f"DEBUG: resource_path called for: {relative_path}")
+    # print(f"DEBUG: sys.frozen: {getattr(sys, 'frozen', 'Not set')}")
+    # print(f"DEBUG: sys._MEIPASS: {getattr(sys, '_MEIPASS', 'Not set')}")
+    # print(f"DEBUG: sys.executable: {sys.executable}")
+    # print(f"DEBUG: sys.argv[0]: {sys.argv[0]}")
+    # print(f"DEBUG: os.path.dirname(sys.executable): {os.path.dirname(sys.executable)}")
+    # print(f"DEBUG: os.path.dirname(os.path.abspath(sys.argv[0])): {os.path.dirname(os.path.abspath(sys.argv[0]))}")
+
+    if getattr(sys, 'frozen', False):
+        # Đang chạy dưới dạng bundle (đã đóng gói bởi PyInstaller)
+        # Đối với dữ liệu nằm ngoài (không dùng --add-data), chúng ta muốn thư mục của file .exe gốc.
+        # sys.argv[0] thường trỏ đến file .exe gốc ngay cả khi sys.executable ở trong _MEIPASS.
+        base_path = os.path.dirname(os.path.abspath(sys.argv[0]))
+        # print(f"DEBUG: Frozen mode. Base path from sys.argv[0]: {base_path}")
+    else:
+        # Không 'frozen', đang chạy dưới dạng script .py (chế độ dev)
+        # Tài nguyên nằm tương đối so với thư mục script.
         base_path = os.path.abspath(".")
-    return os.path.join(base_path, relative_path)
+        # print(f"DEBUG: Not frozen (dev mode). Base path from os.path.abspath('.'): {base_path}")
+
+    final_path = os.path.join(base_path, relative_path)
+    # print(f"DEBUG: Final path for '{relative_path}': {final_path}, Exists: {os.path.exists(final_path)}")
+    return final_path
 
 class App(tk.Tk):
     def __init__(self):
