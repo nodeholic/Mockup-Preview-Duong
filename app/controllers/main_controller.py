@@ -1,9 +1,18 @@
 # app/controllers/main_controller.py
 import os
+import datetime # For timestamp in filename (Task 12.5)
+import threading # For progress bar updates during batch (Task 9.2)
 from tkinter import filedialog
+import tkinter as tk # <--- Thêm dòng này
+from PIL import Image, ImageOps # ImageOps for letterboxing/pillarboxing (Task 7.3)
 # Giả sử các lớp này đã được định nghĩa trong các tệp tương ứng
 # from app.views.main_view import MainView (Sẽ import trong App)
 # from app.models.config_manager import ConfigManager (Sẽ import trong App)
+
+# Define fixed output size (Task: Fixed output size)
+OUTPUT_WIDTH = 1200
+OUTPUT_HEIGHT = 1200
+OUTPUT_BACKGROUND_COLOR = (255, 255, 255, 255) # White background for letterboxing, RGBA
 
 class MainController:
     def __init__(self, view, config_manager):
@@ -11,9 +20,12 @@ class MainController:
         self.config_manager = config_manager
         self.mockups_dir = "mockups/"
         self.designs_dir = "designs/"
+        self.output_dir = "output/" # Default output directory
+        self.view.output_folder_var.set(self.output_dir)
 
         self._setup_event_handlers()
         self.load_initial_data()
+        os.makedirs(self.output_dir, exist_ok=True) # Ensure default output dir exists
 
     def _setup_event_handlers(self):
         # Gắn các hàm xử lý sự kiện từ view vào controller
@@ -45,6 +57,10 @@ class MainController:
         self.view.save_config_button.config(command=self.save_configuration)
         self.view.load_config_button.config(command=self.load_configuration)
         # Task 1.1: Scan thư mục mockups
+
+        # New event handlers for Generate and Output Folder (Task 9.1, 9.4)
+        self.view.generate_button.config(command=self.on_generate_button_pressed)
+        self.view.browse_output_button.config(command=self.browse_output_folder)
 
     def scan_directory(self, directory, extensions=('.jpg', '.png')):
         files = []
@@ -225,3 +241,242 @@ class MainController:
         except ValueError:
             return False
         return True 
+
+    def browse_output_folder(self):
+        directory = filedialog.askdirectory()
+        if directory: # If a directory is selected
+            self.output_dir = directory
+            self.view.output_folder_var.set(self.output_dir)
+            print(f"Output directory set to: {self.output_dir}")
+
+    def on_generate_button_pressed(self):
+        print("Generate button pressed!")
+        selected_mockup = self.view.get_selected_mockup()
+        selected_design = self.view.get_selected_design()
+        output_folder = self.view.output_folder_var.get()
+
+        if not os.path.isdir(output_folder):
+            self.view.show_error("Output Error", f"Output folder does not exist: {output_folder}\nPlease create it or select a valid folder.")
+            return
+
+        if not selected_design:
+            self.view.show_error("Generate Error", "Please select a design image.")
+            return
+
+        # Disable generate button during processing
+        self.view.generate_button.config(state=tk.DISABLED)
+        self.view.reset_progress() # Reset progress bar before starting
+
+        if selected_mockup == "All Mockups":
+            # Run batch processing in a separate thread (Task 9.2)
+            thread = threading.Thread(target=self.generate_batch_all_mockups_one_design, 
+                                      args=(selected_design, output_folder, True))
+            thread.start()
+        elif selected_mockup:
+            # Single image generation can also be threaded if it becomes slow, but usually not necessary
+            # For consistency and to re-enable button, let's thread it too or handle button re-enable carefully.
+            thread = threading.Thread(target=self.generate_single_image_threaded_wrapper, 
+                                      args=(selected_mockup, selected_design, output_folder))
+            thread.start()
+            # self.generate_single_image(selected_mockup, selected_design, output_folder)
+            # self.view.generate_button.config(state=tk.NORMAL) # Re-enable if not threaded
+        else:
+            self.view.show_error("Generate Error", "Please select a mockup image.")
+            self.view.generate_button.config(state=tk.NORMAL) # Re-enable if error before starting
+
+    def generate_single_image_threaded_wrapper(self, mockup_name, design_name, output_folder):
+        try:
+            self.view.update_progress(0) # Show some activity
+            self.generate_single_image(mockup_name, design_name, output_folder)
+            self.view.update_progress(100) # Mark as complete
+        finally:
+            # Ensure button is re-enabled from the main thread via `after`
+            self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
+            self.view.after(100, self.view.reset_progress) # Reset progress after a short delay
+
+    # --- Start of Image Processing and Generation Logic (Phase 2) ---
+    def _get_design_target_rect_on_full_mockup(self, mockup_image_path, config_x_percent, config_y_percent, config_size_w_percent, aspect_ratio_wh):
+        """Calculates the design's target rectangle (x, y, w, h) on the full-resolution mockup image."""
+        try:
+            with Image.open(mockup_image_path) as full_mockup_img:
+                mockup_w, mockup_h = full_mockup_img.size
+
+            # Convert percentages from config (relative to preview canvas) to be relative to full mockup dimensions
+            # For simplicity, assume preview canvas (450x540) represents the whole mockup image for placement percentages.
+            # A more accurate way might involve knowing the actual sub-region of the mockup that the preview canvas displays.
+            
+            # X, Y are percentages of the mockup's dimensions
+            target_x = (config_x_percent / 100) * mockup_w
+            target_y = (config_y_percent / 100) * mockup_h
+
+            # Size (width percent) is also a percentage of the mockup's width
+            target_w = (config_size_w_percent / 100) * mockup_w
+            target_h = target_w / aspect_ratio_wh # height = width / (width/height)
+            
+            # Ensure the design frame does not exceed mockup boundaries (simple clamp)
+            if target_x + target_w > mockup_w:
+                target_w = mockup_w - target_x
+                target_h = target_w / aspect_ratio_wh 
+            if target_y + target_h > mockup_h:
+                target_h = mockup_h - target_y
+                target_w = target_h * aspect_ratio_wh
+            
+            # Ensure x, y are not negative after adjustment (can happen if initial size is too large)
+            target_x = max(0, target_x)
+            target_y = max(0, target_y)
+
+            return int(target_x), int(target_y), int(target_w), int(target_h)
+
+        except FileNotFoundError:
+            self.view.show_error("Image Error", f"Mockup image not found: {mockup_image_path}")
+            return None
+        except Exception as e:
+            self.view.show_error("Image Processing Error", f"Error processing mockup {mockup_image_path}: {e}")
+            return None
+
+    def _fit_design_to_target(self, design_image_path, target_w, target_h):
+        """ Task 7.2, 7.3: Resizes design to fit target_w, target_h, preserving aspect ratio (letterbox/pillarbox). """
+        try:
+            with Image.open(design_image_path) as design_img:
+                original_design_w, original_design_h = design_img.size
+                original_aspect_ratio = original_design_w / original_design_h
+                target_aspect_ratio = target_w / target_h
+
+                if original_aspect_ratio > target_aspect_ratio: # Design is wider than target area (fit by width)
+                    new_w = target_w
+                    new_h = int(new_w / original_aspect_ratio)
+                else: # Design is taller or same aspect_ratio (fit by height)
+                    new_h = target_h
+                    new_w = int(new_h * original_aspect_ratio)
+                
+                resized_design = design_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+                # Create a new image with target dimensions and paste the resized_design centered
+                # Task 10.4: Handle transparent/white background for letterbox
+                # Assuming design might have alpha, use RGBA. Background is transparent.
+                final_fitted_design = Image.new('RGBA', (target_w, target_h), (0,0,0,0)) 
+                
+                paste_x = (target_w - new_w) // 2
+                # Điều chỉnh vị trí dán Y để align top nếu design được letterbox theo chiều dọc
+                if original_aspect_ratio > target_aspect_ratio: # Design rộng hơn/vuông (letterbox dọc)
+                    paste_y = 0 # Align top
+                else: # Design cao hơn (pillarbox ngang) hoặc vừa khít
+                    paste_y = (target_h - new_h) // 2 # Align center theo chiều Y
+                
+                final_fitted_design.paste(resized_design, (paste_x, paste_y))
+                
+                return final_fitted_design
+
+        except FileNotFoundError:
+            self.view.show_error("Image Error", f"Design image not found: {design_image_path}")
+            return None
+        except Exception as e:
+            self.view.show_error("Image Processing Error", f"Error fitting design {design_image_path}: {e}")
+            return None
+
+    def generate_single_image(self, mockup_name, design_name, output_folder):
+        """ Task 12.1: Generates a single composite image. """
+        print(f"Generating image for Mockup: {mockup_name}, Design: {design_name}")
+
+        mockup_path = os.path.join(self.mockups_dir, mockup_name)
+        design_path = os.path.join(self.designs_dir, design_name)
+
+        config = self.config_manager.get_mockup_config(mockup_name)
+        if not config:
+            self.view.show_error("Config Error", f"No configuration found for mockup: {mockup_name}")
+            return False # Indicate failure
+
+        x_percent, y_percent, size_w_percent = config.get('x',0), config.get('y',0), config.get('size',50)
+        design_area_aspect_ratio_wh = self.config_manager.get_aspect_ratio() 
+
+        target_rect = self._get_design_target_rect_on_full_mockup(
+            mockup_path, x_percent, y_percent, size_w_percent, design_area_aspect_ratio_wh
+        )
+        if not target_rect:
+            return False
+        
+        target_x, target_y, target_w, target_h = target_rect
+        if target_w <= 0 or target_h <= 0:
+            self.view.show_error("Generate Error", f"Calculated design area for {mockup_name} has zero or negative size.")
+            return False
+
+        fitted_design_img = self._fit_design_to_target(design_path, target_w, target_h)
+        if not fitted_design_img:
+            return False
+
+        try:
+            full_mockup_img = Image.open(mockup_path).convert("RGBA")
+            
+            # Create a working copy for compositing to keep original full_mockup_img if needed elsewhere
+            composite_img = full_mockup_img.copy()
+            composite_img.paste(fitted_design_img, (target_x, target_y), fitted_design_img)
+
+            # --- Resize composite image to fixed output size (e.g., 1200x1200) with letterboxing ---
+            final_output_image = Image.new('RGBA', (OUTPUT_WIDTH, OUTPUT_HEIGHT), OUTPUT_BACKGROUND_COLOR)
+            img_copy = composite_img.copy()
+            img_copy.thumbnail((OUTPUT_WIDTH, OUTPUT_HEIGHT), Image.Resampling.LANCZOS)
+            
+            # Calculate position to paste the thumbnail onto the background (centered)
+            paste_pos_x = (OUTPUT_WIDTH - img_copy.width) // 2
+            paste_pos_y = (OUTPUT_HEIGHT - img_copy.height) // 2
+            final_output_image.paste(img_copy, (paste_pos_x, paste_pos_y), img_copy if img_copy.mode == 'RGBA' else None)
+            # --- End of resize logic ---
+
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            mockup_base = os.path.splitext(mockup_name)[0]
+            design_base = os.path.splitext(design_name)[0]
+            output_filename = f"{mockup_base}_{design_base}_{timestamp}.png"
+            output_path = os.path.join(output_folder, output_filename)
+
+            final_output_image.save(output_path, "PNG")
+            print(f"Saved as {output_path} (Size: {OUTPUT_WIDTH}x{OUTPUT_HEIGHT})") # Print to console instead of alert
+            # self.view.show_info("Image Generated", f"Saved as {output_path}") # Removed as per request
+            return True # Indicate success
+
+        except FileNotFoundError:
+            self.view.show_error("Image Error", f"File not found during final composition: {mockup_path} or {design_path}")
+            return False
+        except Exception as e:
+            self.view.show_error("Generation Error", f"Failed to generate image for {mockup_name}: {e}")
+            return False
+
+    # --- End of Phase 2 Logic ---
+
+    # --- Start of Batch Processing Logic (Phase 3) ---
+    def generate_batch_all_mockups_one_design(self, design_name, output_folder, threaded=False):
+        """ Task 8.5 / 12.2: Generate all mockups with the selected design. """
+        mockup_files = self.scan_directory(self.mockups_dir)
+        if not mockup_files:
+            self.view.show_error("Batch Generate Error", "No mockup files found.")
+            if threaded: self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
+            return
+        
+        total_mockups = len(mockup_files)
+        print(f"Starting batch generation for {total_mockups} mockups with design {design_name}...")
+        if threaded: self.view.update_progress(0)
+        
+        success_count = 0
+        processed_count = 0
+        for i, mockup_name in enumerate(mockup_files):
+            processed_count += 1
+            current_progress = (processed_count / total_mockups) * 100
+            print(f"Processing mockup {processed_count}/{total_mockups}: {mockup_name} ({current_progress:.2f}%)")
+            
+            if self.generate_single_image(mockup_name, design_name, output_folder):
+                success_count += 1
+            
+            if threaded:
+                self.view.after(0, self.view.update_progress, current_progress)
+            
+        final_message = f"Batch generation finished. Successfully generated {success_count}/{processed_count} images."
+        print(final_message)
+        if threaded:
+            self.view.after(0, lambda: self.view.show_info("Batch Complete", final_message))
+            self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
+            self.view.after(100, self.view.reset_progress) 
+        else:
+            self.view.show_info("Batch Complete", final_message)
+
+    # --- Other batch functions (12.3, 12.4) can be added here ---
+    # def generate_batch_one_mockup_all_designs(...)
+    # def generate_batch_all_combinations(...) 
