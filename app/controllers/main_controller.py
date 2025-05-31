@@ -13,19 +13,31 @@ from PIL import Image, ImageOps # ImageOps for letterboxing/pillarboxing (Task 7
 OUTPUT_WIDTH = 1200
 OUTPUT_HEIGHT = 1200
 OUTPUT_BACKGROUND_COLOR = (255, 255, 255, 255) # White background for letterboxing, RGBA
+# OUTPUT_JPG_QUALITY = 90 # Xóa hằng số này
 
 class MainController:
-    def __init__(self, view, config_manager):
+    def __init__(self, view, config_manager, resource_path_func):
         self.view = view
         self.config_manager = config_manager
-        self.mockups_dir = "mockups/"
-        self.designs_dir = "designs/"
-        self.output_dir = "output/" # Default output directory
-        self.view.output_folder_var.set(self.output_dir)
+        self.resource_path = resource_path_func # Lưu hàm resource_path
+
+        # Sử dụng resource_path cho các thư mục này
+        self.mockups_dir = self.resource_path("mockups/")
+        self.designs_dir = self.resource_path("designs/")
+        # output_dir có thể vẫn là tương đối hoặc bạn cũng có thể dùng resource_path nếu muốn nó nằm trong bundle
+        # Tuy nhiên, thường thì output người dùng muốn chọn tự do bên ngoài.
+        # Chúng ta sẽ giữ nguyên cách output_dir được xử lý qua filedialog, nhưng thư mục mặc định ban đầu có thể điều chỉnh.
+        default_output_parent_dir = self.resource_path(".") # Thư mục gốc của bundle/script
+        self.output_dir = os.path.join(default_output_parent_dir, "output/")
+        
+        self.view.output_folder_var.set(self.output_dir) # Đặt giá trị mặc định cho UI
 
         self._setup_event_handlers()
+        # Đảm bảo các thư mục này tồn tại khi khởi động
+        os.makedirs(self.mockups_dir, exist_ok=True)
+        os.makedirs(self.designs_dir, exist_ok=True)
+        os.makedirs(self.output_dir, exist_ok=True)
         self.load_initial_data()
-        os.makedirs(self.output_dir, exist_ok=True) # Ensure default output dir exists
 
     def _setup_event_handlers(self):
         # Gắn các hàm xử lý sự kiện từ view vào controller
@@ -61,6 +73,18 @@ class MainController:
         # New event handlers for Generate and Output Folder (Task 9.1, 9.4)
         self.view.generate_button.config(command=self.on_generate_button_pressed)
         self.view.browse_output_button.config(command=self.browse_output_folder)
+
+    def handle_xy_entry_change(self):
+        """Được gọi khi nội dung của X hoặc Y Entry thay đổi (KeyRelease)."""
+        # Đảm bảo rằng giá trị DoubleVar đã được cập nhật (sau validate)
+        # Sau đó gọi on_controls_changed để xử lý như khi Scale thay đổi.
+        # print("XY Entry changed, calling on_controls_changed")
+        self.on_controls_changed()
+
+    def handle_size_entry_change(self):
+        """Được gọi khi nội dung của Size Entry thay đổi (KeyRelease)."""
+        # print("Size Entry changed, calling on_controls_changed_size")
+        self.on_controls_changed_size()
 
     def scan_directory(self, directory, extensions=('.jpg', '.png')):
         files = []
@@ -423,7 +447,7 @@ class MainController:
         config = self.config_manager.get_mockup_config(mockup_name)
         if not config:
             self.view.show_error("Config Error", f"No configuration found for mockup: {mockup_name}")
-            return False # Indicate failure
+            return False 
 
         x_percent, y_percent, size_w_percent = config.get('x',0), config.get('y',0), config.get('size',50)
         design_area_aspect_ratio_wh = self.config_manager.get_aspect_ratio() 
@@ -445,32 +469,39 @@ class MainController:
 
         try:
             full_mockup_img = Image.open(mockup_path).convert("RGBA")
-            
-            # Create a working copy for compositing to keep original full_mockup_img if needed elsewhere
             composite_img = full_mockup_img.copy()
             composite_img.paste(fitted_design_img, (target_x, target_y), fitted_design_img)
 
-            # --- Resize composite image to fixed output size (e.g., 1200x1200) with letterboxing ---
-            final_output_image = Image.new('RGBA', (OUTPUT_WIDTH, OUTPUT_HEIGHT), OUTPUT_BACKGROUND_COLOR)
-            img_copy = composite_img.copy()
-            img_copy.thumbnail((OUTPUT_WIDTH, OUTPUT_HEIGHT), Image.Resampling.LANCZOS)
-            
-            # Calculate position to paste the thumbnail onto the background (centered)
-            paste_pos_x = (OUTPUT_WIDTH - img_copy.width) // 2
-            paste_pos_y = (OUTPUT_HEIGHT - img_copy.height) // 2
-            final_output_image.paste(img_copy, (paste_pos_x, paste_pos_y), img_copy if img_copy.mode == 'RGBA' else None)
-            # --- End of resize logic ---
+            # --- Xử lý ảnh composite_img để lưu dưới dạng JPG --- 
+            # composite_img hiện tại là ảnh mockup full res đã được paste design lên.
+            # Chúng ta không resize nó nữa.
+
+            image_to_save = composite_img
+            if image_to_save.mode == 'RGBA':
+                # Tạo nền trắng RGB với kích thước của image_to_save
+                background_rgb = OUTPUT_BACKGROUND_COLOR[:3]
+                final_image_rgb = Image.new("RGB", image_to_save.size, background_rgb)
+                # Dán image_to_save (có alpha) lên nền trắng này
+                final_image_rgb.paste(image_to_save, (0,0), image_to_save) 
+                image_to_save = final_image_rgb
+            elif image_to_save.mode != 'RGB':
+                image_to_save = image_to_save.convert("RGB")
+            # --- Kết thúc xử lý để lưu JPG ---
 
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             mockup_base = os.path.splitext(mockup_name)[0]
             design_base = os.path.splitext(design_name)[0]
-            output_filename = f"{mockup_base}_{design_base}_{timestamp}.png"
+            output_filename = f"{mockup_base}_{design_base}_{timestamp}.jpg"
             output_path = os.path.join(output_folder, output_filename)
 
-            final_output_image.save(output_path, "PNG")
-            print(f"Saved as {output_path} (Size: {OUTPUT_WIDTH}x{OUTPUT_HEIGHT})") # Print to console instead of alert
-            # self.view.show_info("Image Generated", f"Saved as {output_path}") # Removed as per request
-            return True # Indicate success
+            # Lấy chất lượng JPG từ view
+            jpg_quality = self.view.jpg_quality_var.get()
+            
+            image_to_save.save(output_path, "JPEG", quality=jpg_quality)
+            # Lấy kích thước thực của ảnh đã lưu để hiển thị
+            saved_width, saved_height = image_to_save.size
+            print(f"Saved as {output_path} (Size: {saved_width}x{saved_height})")
+            return True
 
         except FileNotFoundError:
             self.view.show_error("Image Error", f"File not found during final composition: {mockup_path} or {design_path}")

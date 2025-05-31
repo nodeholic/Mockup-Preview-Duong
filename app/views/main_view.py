@@ -7,6 +7,7 @@ class MainView(ttk.Frame):
     def __init__(self, parent):
         super().__init__(parent, padding="10")
         self.parent = parent
+        self.controller = None # Thêm tham chiếu đến controller
         self.grid(sticky=(tk.W, tk.E, tk.N, tk.S))
         parent.columnconfigure(0, weight=1)
         parent.rowconfigure(0, weight=1)
@@ -46,28 +47,33 @@ class MainView(ttk.Frame):
         controls_frame = ttk.LabelFrame(left_panel, text="Controls", padding="10")
         controls_frame.grid(row=2, column=0, padx=5, pady=5, sticky=(tk.W, tk.E, tk.N))
 
-        vcmd = (self.register(self._validate_input), '%P', '%W') # %P: new value, %W: widget name
+        # Đăng ký các hàm validate mới
+        vcmd_xy = (self.register(self._validate_xy_input), '%P')
+        vcmd_size = (self.register(self._validate_size_input), '%P')
 
         ttk.Label(controls_frame, text="X:").grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
-        self.x_var = tk.IntVar()
+        self.x_var = tk.DoubleVar()
         self.x_scale = ttk.Scale(controls_frame, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.x_var)
         self.x_scale.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=2, pady=2)
-        self.x_entry = ttk.Entry(controls_frame, textvariable=self.x_var, width=5, name="x_entry", validate='key', validatecommand=vcmd)
+        self.x_entry = ttk.Entry(controls_frame, textvariable=self.x_var, width=5, name="x_entry", validate='key', validatecommand=vcmd_xy)
         self.x_entry.grid(row=0, column=2, sticky=tk.E, padx=2, pady=2)
+        self.x_entry.bind("<KeyRelease>", self._on_xy_entry_changed) # Binding mới
 
         ttk.Label(controls_frame, text="Y:").grid(row=1, column=0, sticky=tk.W, padx=2, pady=2)
-        self.y_var = tk.IntVar()
+        self.y_var = tk.DoubleVar()
         self.y_scale = ttk.Scale(controls_frame, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.y_var)
         self.y_scale.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=2, pady=2)
-        self.y_entry = ttk.Entry(controls_frame, textvariable=self.y_var, width=5, name="y_entry", validate='key', validatecommand=vcmd)
+        self.y_entry = ttk.Entry(controls_frame, textvariable=self.y_var, width=5, name="y_entry", validate='key', validatecommand=vcmd_xy)
         self.y_entry.grid(row=1, column=2, sticky=tk.E, padx=2, pady=2)
+        self.y_entry.bind("<KeyRelease>", self._on_xy_entry_changed) # Binding mới
 
         ttk.Label(controls_frame, text="Size (Width):").grid(row=2, column=0, sticky=tk.W, padx=2, pady=2)
-        self.size_var = tk.IntVar(value=50)
+        self.size_var = tk.DoubleVar(value=50.0)
         self.size_scale = ttk.Scale(controls_frame, from_=10, to=100, orient=tk.HORIZONTAL, variable=self.size_var)
         self.size_scale.grid(row=2, column=1, sticky=(tk.W, tk.E), padx=2, pady=2)
-        self.size_entry = ttk.Entry(controls_frame, textvariable=self.size_var, width=5, name="size_entry", validate='key', validatecommand=vcmd)
+        self.size_entry = ttk.Entry(controls_frame, textvariable=self.size_var, width=5, name="size_entry", validate='key', validatecommand=vcmd_size)
         self.size_entry.grid(row=2, column=2, sticky=tk.E, padx=2, pady=2)
+        self.size_entry.bind("<KeyRelease>", self._on_size_entry_changed) # Binding mới
 
         controls_frame.columnconfigure(1, weight=1)
         
@@ -81,6 +87,13 @@ class MainView(ttk.Frame):
         self.output_folder_entry.grid(row=1, column=0, sticky=(tk.W, tk.E), padx=2, pady=2)
         self.browse_output_button = ttk.Button(output_frame, text="Browse...")
         self.browse_output_button.grid(row=1, column=1, sticky=tk.E, padx=2, pady=2)
+
+        # Thêm điều khiển chất lượng JPG
+        ttk.Label(output_frame, text="JPG Quality (0-100):").grid(row=2, column=0, sticky=tk.W, padx=2, pady=(5,2)) # Thêm pady top
+        self.jpg_quality_var = tk.IntVar(value=90)
+        self.jpg_quality_spinbox = ttk.Spinbox(output_frame, from_=0, to=100, textvariable=self.jpg_quality_var, width=5)
+        self.jpg_quality_spinbox.grid(row=2, column=1, sticky=tk.W, padx=2, pady=(5,2)) # sticky W để căn trái, thêm pady top
+
         output_frame.columnconfigure(0, weight=1)
 
         # --- Config Buttons & Generate Button ---
@@ -136,28 +149,43 @@ class MainView(ttk.Frame):
         # Ensure the button uses this style. The style name was already set during button creation.
         # self.generate_button.configure(style="Accent.TButton") # Re-apply if needed, but usually not
 
-    def _validate_input(self, P, W_name):
-        # P is the value of the entry if the edit is allowed
-        # W_name is the widget name
-        if P == "":  # Allow empty string for intermediate editing
+    def set_controller(self, controller):
+        self.controller = controller
+
+    def _on_xy_entry_changed(self, event=None): # event được truyền bởi bind
+        if self.controller:
+            # Gọi hàm trong controller để xử lý thay đổi X hoặc Y từ Entry
+            # Controller sẽ đọc giá trị từ x_var hoặc y_var và gọi on_controls_changed
+            self.controller.handle_xy_entry_change()
+
+    def _on_size_entry_changed(self, event=None):
+        if self.controller:
+            # Gọi hàm trong controller để xử lý thay đổi Size từ Entry
+            self.controller.handle_size_entry_change()
+
+    def _validate_xy_input(self, P_value):
+        if P_value == "": 
             return True
         try:
-            val = int(P)
-            widget = self.nametowidget(W_name)
-            if widget.winfo_name() == "x_entry" or widget.winfo_name() == "y_entry":
-                if 0 <= val <= 100:
-                    return True
-                self.bell() # Sound a bell for invalid input
-                return False
-            elif widget.winfo_name() == "size_entry":
-                if 10 <= val <= 100: # Assuming size has a different range
-                    return True
-                self.bell()
-                return False
+            val = float(P_value)
+            if 0.0 <= val <= 100.0:
+                return True
         except ValueError:
-            self.bell()
-            return False # Not an integer
-        return False # Should not reach here
+            pass # Sẽ return False bên dưới nếu không hợp lệ
+        self.bell()
+        return False
+
+    def _validate_size_input(self, P_value):
+        if P_value == "": 
+            return True
+        try:
+            val = float(P_value)
+            if 10.0 <= val <= 100.0: 
+                return True
+        except ValueError:
+            pass # Sẽ return False bên dưới nếu không hợp lệ
+        self.bell()
+        return False
 
     # Methods để update UI sẽ được thêm ở đây
     def update_mockup_dropdown(self, mockup_files):
@@ -179,9 +207,9 @@ class MainView(ttk.Frame):
             self.design_list.current(0)
 
     def update_controls(self, x, y, size):
-        self.x_var.set(int(x))
-        self.y_var.set(int(y))
-        self.size_var.set(int(size))
+        self.x_var.set(float(x))
+        self.y_var.set(float(y))
+        self.size_var.set(float(size))
 
     def get_selected_mockup(self):
         return self.mockup_list_var.get()
