@@ -94,18 +94,18 @@ class MainController:
         print(f"Mockup selected: {selected_mockup}")
         if selected_mockup and selected_mockup != "All Mockups":
             self.load_mockup_config(selected_mockup)
-            # Hiển thị mockup image lên canvas
             mockup_image_path = os.path.join(self.mockups_dir, selected_mockup)
             self.view.draw_mockup_on_canvas(mockup_image_path)
-        else:
-            # Xóa mockup image khỏi canvas hoặc hiển thị trạng thái "All"
-            self.view.draw_mockup_on_canvas(None) # Hoặc một ảnh mặc định
-            self.view.update_controls(0,0,50) # Reset controls
-        self.update_preview()
+        elif selected_mockup == "All Mockups":
+            self.view.draw_mockup_on_canvas(None) # Xóa mockup khỏi canvas
+            self.view.update_controls(0,0,50) # Reset controls, hoặc giá trị mặc định khác
+        self.update_preview() # Luôn gọi update_preview để cập nhật khung design
 
     def on_design_selected(self, event=None):
         selected_design = self.view.get_selected_design()
         print(f"Design selected: {selected_design}")
+        # Không cần làm gì đặc biệt ở đây nếu là "All Designs"
+        # vì update_preview sẽ xử lý việc hiển thị hoặc không hiển thị design.
         self.update_preview()
 
     def on_controls_changed(self, value=None): # value là giá trị từ Scale hoặc IntVar
@@ -135,7 +135,6 @@ class MainController:
         self.on_controls_changed() # Gọi hàm chung để cập nhật và vẽ lại
 
     def update_preview(self):
-        # Lấy giá trị X, Y, Size từ UI
         x_pos = self.view.x_var.get()
         y_pos = self.view.y_var.get()
         frame_width_percent = self.view.size_var.get()
@@ -143,39 +142,39 @@ class MainController:
         canvas_width = self.view.preview_canvas.winfo_width()
         canvas_height = self.view.preview_canvas.winfo_height()
 
-        if canvas_width <= 1 or canvas_height <= 1: # Canvas chưa được vẽ
-            # Đặt lịch chạy lại sau một khoảng thời gian ngắn
+        if canvas_width <= 1 or canvas_height <= 1: 
             self.view.after(100, self.update_preview)
             return
 
-        # Tính toán kích thước pixel thực tế dựa trên phần trăm
-        # Giả sử X, Y là % của kích thước canvas
         actual_x = (x_pos / 100) * canvas_width
         actual_y = (y_pos / 100) * canvas_height
-
-        # Size (frame_width_percent) là % của chiều rộng canvas
         frame_actual_width = (frame_width_percent / 100) * canvas_width
         
-        # Task 6.1: Tính chiều cao dựa trên tỷ lệ
         aspect_ratio = self.config_manager.get_aspect_ratio()
-        frame_actual_height = frame_actual_width / aspect_ratio # width / (width/height) = height
+        frame_actual_height = frame_actual_width / aspect_ratio 
 
-        # Kiểm tra nếu chiều cao vượt quá canvas, thì scale lại dựa trên chiều cao
         if actual_y + frame_actual_height > canvas_height:
             frame_actual_height = canvas_height - actual_y
             frame_actual_width = frame_actual_height * aspect_ratio
         
-        # Kiểm tra nếu chiều rộng vượt quá canvas (sau khi scale chiều cao)
         if actual_x + frame_actual_width > canvas_width:
             frame_actual_width = canvas_width - actual_x
             frame_actual_height = frame_actual_width / aspect_ratio
 
-        selected_design = self.view.get_selected_design()
+        selected_design_name = self.view.get_selected_design()
         design_image_path = None
-        if selected_design:
-            design_image_path = os.path.join(self.designs_dir, selected_design)
+        # Chỉ tạo đường dẫn design nếu một design cụ thể được chọn
+        if selected_design_name and selected_design_name != "All Designs":
+            design_image_path = os.path.join(self.designs_dir, selected_design_name)
 
-        self.view.draw_design_frame_on_canvas(actual_x, actual_y, frame_actual_width, frame_actual_height, design_image_path)
+        # Kiểm tra xem có mockup nào được chọn không (trừ "All Mockups")
+        # Chỉ vẽ khung design nếu có mockup đang hiển thị (không phải "All Mockups")
+        current_mockup = self.view.get_selected_mockup()
+        if current_mockup and current_mockup != "All Mockups":
+            self.view.draw_design_frame_on_canvas(actual_x, actual_y, frame_actual_width, frame_actual_height, design_image_path)
+        else:
+            # Nếu "All Mockups" được chọn hoặc không có mockup nào, xóa khung design/design
+            self.view.draw_design_frame_on_canvas(0, 0, 0, 0, None) # Hoặc một cách clear khác
 
     def load_mockup_config(self, mockup_name):
         config = self.config_manager.get_mockup_config(mockup_name)
@@ -258,31 +257,56 @@ class MainController:
         if not os.path.isdir(output_folder):
             self.view.show_error("Output Error", f"Output folder does not exist: {output_folder}\nPlease create it or select a valid folder.")
             return
-
-        if not selected_design:
-            self.view.show_error("Generate Error", "Please select a design image.")
+        
+        # Kiểm tra nếu "All Designs" được chọn mà không có design nào thực tế
+        if selected_design == "All Designs" and not self.scan_directory(self.designs_dir):
+            self.view.show_error("Generate Error", "No design files found to process with \"All Designs\".")
+            return
+            
+        # Kiểm tra tương tự cho "All Mockups"
+        if selected_mockup == "All Mockups" and not self.scan_directory(self.mockups_dir):
+            self.view.show_error("Generate Error", "No mockup files found to process with \"All Mockups\".")
             return
 
-        # Disable generate button during processing
+        if not selected_design and selected_design != "All Designs": # Nếu không chọn gì và cũng không phải là "All Designs"
+            self.view.show_error("Generate Error", "Please select a design image or \"All Designs\".")
+            return
+
+        if not selected_mockup and selected_mockup != "All Mockups":
+            self.view.show_error("Generate Error", "Please select a mockup image or \"All Mockups\".")
+            return
+
         self.view.generate_button.config(state=tk.DISABLED)
-        self.view.reset_progress() # Reset progress bar before starting
+        self.view.reset_progress()
+
+        thread_args = (output_folder, True) # Common args for threading
+        target_function = None
 
         if selected_mockup == "All Mockups":
-            # Run batch processing in a separate thread (Task 9.2)
-            thread = threading.Thread(target=self.generate_batch_all_mockups_one_design, 
-                                      args=(selected_design, output_folder, True))
+            if selected_design == "All Designs":
+                print("Batch: All Mockups x All Designs")
+                target_function = self.generate_batch_all_combinations
+                # generate_batch_all_combinations sẽ không cần selected_design/mockup cụ thể
+            else: # All Mockups, Single Design
+                print(f"Batch: All Mockups x Design: {selected_design}")
+                target_function = self.generate_batch_all_mockups_one_design
+                thread_args = (selected_design, output_folder, True)
+        elif selected_design == "All Designs": # Single Mockup, All Designs
+            print(f"Batch: Mockup: {selected_mockup} x All Designs")
+            target_function = self.generate_batch_one_mockup_all_designs
+            thread_args = (selected_mockup, output_folder, True)
+        else: # Single Mockup, Single Design
+            print(f"Single: Mockup: {selected_mockup} x Design: {selected_design}")
+            target_function = self.generate_single_image_threaded_wrapper
+            thread_args = (selected_mockup, selected_design, output_folder)
+        
+        if target_function:
+            thread = threading.Thread(target=target_function, args=thread_args)
             thread.start()
-        elif selected_mockup:
-            # Single image generation can also be threaded if it becomes slow, but usually not necessary
-            # For consistency and to re-enable button, let's thread it too or handle button re-enable carefully.
-            thread = threading.Thread(target=self.generate_single_image_threaded_wrapper, 
-                                      args=(selected_mockup, selected_design, output_folder))
-            thread.start()
-            # self.generate_single_image(selected_mockup, selected_design, output_folder)
-            # self.view.generate_button.config(state=tk.NORMAL) # Re-enable if not threaded
         else:
-            self.view.show_error("Generate Error", "Please select a mockup image.")
-            self.view.generate_button.config(state=tk.NORMAL) # Re-enable if error before starting
+            # Should not happen if logic is correct, but as a fallback:
+            self.view.show_error("Generate Error", "Invalid selection combination.")
+            self.view.generate_button.config(state=tk.NORMAL)
 
     def generate_single_image_threaded_wrapper(self, mockup_name, design_name, output_folder):
         try:
@@ -474,6 +498,82 @@ class MainController:
             self.view.after(0, lambda: self.view.show_info("Batch Complete", final_message))
             self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
             self.view.after(100, self.view.reset_progress) 
+        else:
+            self.view.show_info("Batch Complete", final_message)
+
+    def generate_batch_one_mockup_all_designs(self, mockup_name, output_folder, threaded=False):
+        """ Task 12.3: Generate the selected mockup with all available designs. """
+        design_files = self.scan_directory(self.designs_dir)
+        if not design_files:
+            self.view.show_error("Batch Generate Error", "No design files found.")
+            if threaded: self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
+            return
+
+        total_designs = len(design_files)
+        print(f"Starting batch generation for mockup '{mockup_name}' with {total_designs} designs...")
+        if threaded: self.view.update_progress(0)
+
+        success_count = 0
+        processed_count = 0
+        for i, design_name in enumerate(design_files):
+            processed_count += 1
+            current_progress = (processed_count / total_designs) * 100
+            print(f"Processing design {processed_count}/{total_designs}: {design_name} ({current_progress:.2f}%)")
+
+            if self.generate_single_image(mockup_name, design_name, output_folder):
+                success_count += 1
+            
+            if threaded:
+                self.view.after(0, self.view.update_progress, current_progress)
+
+        final_message = f"Batch generation finished for mockup '{mockup_name}'.\nSuccessfully generated {success_count}/{processed_count} images."
+        print(final_message)
+        if threaded:
+            self.view.after(0, lambda: self.view.show_info("Batch Complete", final_message))
+            self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
+            self.view.after(100, self.view.reset_progress)
+        else:
+            self.view.show_info("Batch Complete", final_message)
+
+    def generate_batch_all_combinations(self, output_folder, threaded=False):
+        """ Task 12.4: Generate all mockups with all available designs. """
+        mockup_files = self.scan_directory(self.mockups_dir)
+        design_files = self.scan_directory(self.designs_dir)
+
+        if not mockup_files or not design_files:
+            self.view.show_error("Batch Generate Error", "No mockup or design files found for all x all combination.")
+            if threaded: self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
+            return
+
+        total_combinations = len(mockup_files) * len(design_files)
+        if total_combinations == 0:
+            self.view.show_error("Batch Generate Error", "No combinations to generate.")
+            if threaded: self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
+            return
+            
+        print(f"Starting batch generation for ALL {len(mockup_files)} mockups with ALL {len(design_files)} designs ({total_combinations} total images)...")
+        if threaded: self.view.update_progress(0)
+
+        success_count = 0
+        processed_count = 0
+        for mockup_name in mockup_files:
+            for design_name in design_files:
+                processed_count += 1
+                current_progress = (processed_count / total_combinations) * 100
+                print(f"Processing combination {processed_count}/{total_combinations}: Mockup '{mockup_name}', Design '{design_name}' ({current_progress:.2f}%)")
+
+                if self.generate_single_image(mockup_name, design_name, output_folder):
+                    success_count += 1
+                
+                if threaded:
+                    self.view.after(0, self.view.update_progress, current_progress)
+        
+        final_message = f"ALL x ALL Batch generation finished.\nSuccessfully generated {success_count}/{processed_count} images."
+        print(final_message)
+        if threaded:
+            self.view.after(0, lambda: self.view.show_info("Batch Complete", final_message))
+            self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
+            self.view.after(100, self.view.reset_progress)
         else:
             self.view.show_info("Batch Complete", final_message)
 

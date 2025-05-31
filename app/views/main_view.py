@@ -33,6 +33,8 @@ class MainView(ttk.Frame):
         design_frame.grid(row=1, column=0, padx=5, pady=5, sticky=(tk.W, tk.E, tk.N))
         self.design_list_var = tk.StringVar()
         self.design_list = ttk.Combobox(design_frame, textvariable=self.design_list_var, state="readonly")
+        self.design_list["values"] = ["All Designs"]
+        self.design_list.current(0)
         self.design_list.pack(fill=tk.X)
 
         # --- Controls (X, Y, Size) ---
@@ -159,8 +161,16 @@ class MainView(ttk.Frame):
             self.mockup_list.current(0) # Mặc định chọn "All Mockups"
 
     def update_design_dropdown(self, design_files):
-        self.design_list["values"] = design_files
-        if design_files:
+        self.design_list["values"] = ["All Designs"] + design_files
+        if not design_files:
+            self.design_list.current(0)
+        elif self.design_list_var.get() not in self.design_list["values"]:
+            self.design_list.current(0)
+        current_selection = self.design_list_var.get()
+        new_values = self.design_list["values"]
+        if current_selection in new_values:
+            self.design_list.current(new_values.index(current_selection))
+        else:
             self.design_list.current(0)
 
     def update_controls(self, x, y, size):
