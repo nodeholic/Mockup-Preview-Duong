@@ -452,9 +452,7 @@ class MainController:
             return None
 
     def generate_single_image(self, mockup_name, design_name, output_folder):
-        """ Task 12.1: Generates a single composite image. """
         print(f"Generating image for Mockup: {mockup_name}, Design: {design_name}")
-
         mockup_path = os.path.join(self.mockups_dir, mockup_name)
         design_path = os.path.join(self.designs_dir, design_name)
 
@@ -465,22 +463,20 @@ class MainController:
 
         x_percent, y_percent, size_w_percent = config.get('x',0), config.get('y',0), config.get('size',50)
         opacity_percent = config.get('opacity', 100.0) # Lấy opacity từ config
-        design_area_aspect_ratio_wh = self.config_manager.get_aspect_ratio() 
+        design_area_aspect_ratio_wh = self.config_manager.get_aspect_ratio()
 
         target_rect = self._get_design_target_rect_on_full_mockup(
             mockup_path, x_percent, y_percent, size_w_percent, design_area_aspect_ratio_wh
         )
-        if not target_rect:
-            return False
-        
+        if not target_rect: return False
         target_x, target_y, target_w, target_h = target_rect
         if target_w <= 0 or target_h <= 0:
-            self.view.show_error("Generate Error", f"Calculated design area for {mockup_name} has zero or negative size.")
+            # self.view.show_error("Generate Error", f"Calculated design area for {mockup_name} has zero or negative size.") # Có thể gây nhiều popup khi batch
+            print(f"Error: Calculated design area for {mockup_name} has zero or negative size.")
             return False
 
         fitted_design_img = self._fit_design_to_target(design_path, target_w, target_h)
-        if not fitted_design_img:
-            return False
+        if not fitted_design_img: return False
 
         # Áp dụng opacity cho fitted_design_img (ảnh RGBA)
         if fitted_design_img.mode != 'RGBA':
@@ -497,43 +493,42 @@ class MainController:
         try:
             full_mockup_img = Image.open(mockup_path).convert("RGBA")
             composite_img = full_mockup_img.copy()
-            composite_img.paste(fitted_design_img, (target_x, target_y), fitted_design_img)
-
-            # --- Xử lý ảnh composite_img để lưu dưới dạng JPG --- 
-            # composite_img hiện tại là ảnh mockup full res đã được paste design lên.
-            # Chúng ta không resize nó nữa.
+            # Dùng fitted_design_img đã có alpha để ghép
+            composite_img.paste(fitted_design_img, (target_x, target_y), fitted_design_img) 
 
             image_to_save = composite_img
+            # Chuyển đổi sang RGB để lưu JPEG
             if image_to_save.mode == 'RGBA':
                 # Tạo nền trắng RGB với kích thước của image_to_save
-                background_rgb = OUTPUT_BACKGROUND_COLOR[:3]
+                background_rgb = OUTPUT_BACKGROUND_COLOR[:3] 
                 final_image_rgb = Image.new("RGB", image_to_save.size, background_rgb)
                 # Dán image_to_save (có alpha) lên nền trắng này
                 final_image_rgb.paste(image_to_save, (0,0), image_to_save) 
                 image_to_save = final_image_rgb
             elif image_to_save.mode != 'RGB':
                 image_to_save = image_to_save.convert("RGB")
-            # --- Kết thúc xử lý để lưu JPG ---
 
             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             mockup_base = os.path.splitext(mockup_name)[0]
             design_base = os.path.splitext(design_name)[0]
             output_filename = f"{mockup_base}_{design_base}_{timestamp}.jpg"
             output_path = os.path.join(output_folder, output_filename)
-
-            # Lấy chất lượng JPG từ view
-            jpg_quality = self.view.jpg_quality_var.get()
             
-            image_to_save.save(output_path, "JPEG") # Bỏ quality=...
-            # Lấy kích thước thực của ảnh đã lưu để hiển thị
+            # Lưu ảnh JPEG, không còn tham số quality từ view
+            image_to_save.save(output_path, "JPEG") 
+            
             saved_width, saved_height = image_to_save.size
             print(f"Saved as {output_path} (Size: {saved_width}x{saved_height})")
             return True
-
         except FileNotFoundError:
-            self.view.show_error("Image Error", f"File not found during final composition: {mockup_path} or {design_path}")
+            self.view.show_error("Image Error", f"File not found: {mockup_path} or {design_path}")
             return False
         except Exception as e:
+            # Ghi log lỗi chi tiết hơn ra console để debug
+            import traceback
+            print(f"--- ERROR in generate_single_image for {mockup_name} & {design_name} ---")
+            print(traceback.format_exc())
+            print(f"--- END ERROR ---")
             self.view.show_error("Generation Error", f"Failed to generate image for {mockup_name}: {e}")
             return False
 
