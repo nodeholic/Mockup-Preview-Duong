@@ -4,7 +4,7 @@ import datetime # For timestamp in filename (Task 12.5)
 import threading # For progress bar updates during batch (Task 9.2)
 from tkinter import filedialog
 import tkinter as tk # <--- Thêm dòng này
-from PIL import Image, ImageOps # ImageOps for letterboxing/pillarboxing (Task 7.3)
+from PIL import Image, ImageOps, ImageEnhance # Thêm ImageEnhance
 # Giả sử các lớp này đã được định nghĩa trong các tệp tương ứng
 # from app.views.main_view import MainView (Sẽ import trong App)
 # from app.models.config_manager import ConfigManager (Sẽ import trong App)
@@ -48,6 +48,7 @@ class MainController:
         self.view.x_scale.config(command=self.on_controls_changed)
         self.view.y_scale.config(command=self.on_controls_changed)
         self.view.size_scale.config(command=self.on_controls_changed_size)
+        self.view.opacity_scale.config(command=self.on_controls_changed) # Opacity scale cũng gọi on_controls_changed
 
         # Entry events (để cập nhật khi nhấn Enter hoặc mất focus)
         # Vì Entry và Scale dùng chung IntVar, thay đổi hợp lệ trên Entry sẽ cập nhật IntVar,
@@ -86,6 +87,9 @@ class MainController:
         # print("Size Entry changed, calling on_controls_changed_size")
         self.on_controls_changed_size()
 
+    def handle_opacity_entry_change(self): # Hàm mới
+        self.on_controls_changed() 
+
     def scan_directory(self, directory, extensions=('.jpg', '.png')):
         files = []
         try:
@@ -111,6 +115,8 @@ class MainController:
         # Load config cho mockup đầu tiên (nếu có)
         if mockup_files:
             self.load_mockup_config(self.view.get_selected_mockup())
+        else: # Nếu không có mockup nào, vẫn cần đảm bảo control opacity được đặt giá trị mặc định
+             self.view.update_controls(0, 0, 50, 100.0)
         self.update_preview()
 
     def on_mockup_selected(self, event=None):
@@ -121,8 +127,8 @@ class MainController:
             mockup_image_path = os.path.join(self.mockups_dir, selected_mockup)
             self.view.draw_mockup_on_canvas(mockup_image_path)
         elif selected_mockup == "All Mockups":
-            self.view.draw_mockup_on_canvas(None) # Xóa mockup khỏi canvas
-            self.view.update_controls(0,0,50) # Reset controls, hoặc giá trị mặc định khác
+            self.view.draw_mockup_on_canvas(None)
+            self.view.update_controls(0,0,50,100.0) # Reset cả opacity
         self.update_preview() # Luôn gọi update_preview để cập nhật khung design
 
     def on_design_selected(self, event=None):
@@ -137,6 +143,7 @@ class MainController:
         x = self.view.x_var.get()
         y = self.view.y_var.get()
         size_w = self.view.size_var.get()
+        opacity = self.view.opacity_var.get() # Lấy opacity
         
         # Validate inputs (Task 6.3)
         # Giữ lại comment về validation, sẽ làm ở Task 6.3
@@ -145,7 +152,7 @@ class MainController:
 
         current_mockup = self.view.get_selected_mockup()
         if current_mockup and current_mockup != "All Mockups":
-            self.config_manager.update_mockup_config(current_mockup, x, y, size_w)
+            self.config_manager.update_mockup_config(current_mockup, x, y, size_w, opacity) # Lưu cả opacity
             # Task 6.2: Auto-save config khi thay đổi
             self.config_manager.save_config() 
         self.update_preview()
@@ -162,6 +169,7 @@ class MainController:
         x_pos_percent = self.view.x_var.get()
         y_pos_percent = self.view.y_var.get()
         frame_width_percent = self.view.size_var.get()
+        opacity = self.view.opacity_var.get() # Lấy opacity
 
         # Lấy kích thước và offset của ảnh mockup thực tế đang hiển thị trên canvas
         displayed_mockup_w = self.view.displayed_mockup_width
@@ -218,9 +226,14 @@ class MainController:
     def load_mockup_config(self, mockup_name):
         config = self.config_manager.get_mockup_config(mockup_name)
         if config:
-            self.view.update_controls(config.get('x', 0), config.get('y', 0), config.get('size', 50))
+            self.view.update_controls(
+                config.get('x', 0),
+                config.get('y', 0),
+                config.get('size', 50),
+                config.get('opacity', 100.0) # Lấy opacity, mặc định 100
+            )
         else:
-            self.view.update_controls(0, 0, 50) # Giá trị mặc định
+            self.view.update_controls(0, 0, 50, 100.0) # Giá trị mặc định bao gồm opacity
         self.update_preview()
 
     def save_configuration(self):
@@ -231,7 +244,8 @@ class MainController:
             x = self.view.x_var.get()
             y = self.view.y_var.get()
             size = self.view.size_var.get()
-            self.config_manager.update_mockup_config(current_mockup, x, y, size)
+            opacity = self.view.opacity_var.get() # Lấy opacity
+            self.config_manager.update_mockup_config(current_mockup, x, y, size, opacity) # Lưu cả opacity
             config_was_updated = True
             # Không cần gọi save_config() ở đây nữa nếu auto-save đã bật
             # Tuy nhiên, nút "Save Config" vẫn nên có chức năng lưu rõ ràng
@@ -259,7 +273,7 @@ class MainController:
         if selected_mockup and selected_mockup != "All Mockups":
             self.load_mockup_config(selected_mockup)
         else: # Nếu "All Mockups" được chọn hoặc không có mockup nào, reset controls
-            self.view.update_controls(0,0,50)
+            self.view.update_controls(0,0,50,100.0) # Reset cả opacity
         self.update_preview()
         self.view.show_info("Config Loaded", "Configuration loaded from file.")
 
@@ -450,6 +464,7 @@ class MainController:
             return False 
 
         x_percent, y_percent, size_w_percent = config.get('x',0), config.get('y',0), config.get('size',50)
+        opacity_percent = config.get('opacity', 100.0) # Lấy opacity từ config
         design_area_aspect_ratio_wh = self.config_manager.get_aspect_ratio() 
 
         target_rect = self._get_design_target_rect_on_full_mockup(
@@ -466,6 +481,18 @@ class MainController:
         fitted_design_img = self._fit_design_to_target(design_path, target_w, target_h)
         if not fitted_design_img:
             return False
+
+        # Áp dụng opacity cho fitted_design_img (ảnh RGBA)
+        if fitted_design_img.mode != 'RGBA':
+            fitted_design_img = fitted_design_img.convert('RGBA')
+        
+        datas = fitted_design_img.getdata()
+        newData = []
+        for item in datas:
+            new_alpha = int(item[3] * (opacity_percent / 100.0))
+            newData.append((item[0], item[1], item[2], new_alpha))
+        fitted_design_img.putdata(newData)
+        # Kết thúc áp dụng opacity
 
         try:
             full_mockup_img = Image.open(mockup_path).convert("RGBA")
@@ -497,7 +524,7 @@ class MainController:
             # Lấy chất lượng JPG từ view
             jpg_quality = self.view.jpg_quality_var.get()
             
-            image_to_save.save(output_path, "JPEG", quality=jpg_quality)
+            image_to_save.save(output_path, "JPEG") # Bỏ quality=...
             # Lấy kích thước thực của ảnh đã lưu để hiển thị
             saved_width, saved_height = image_to_save.size
             print(f"Saved as {output_path} (Size: {saved_width}x{saved_height})")

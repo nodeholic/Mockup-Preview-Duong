@@ -42,13 +42,14 @@ class ConfigManager:
     def get_mockup_config(self, mockup_name):
         return self.config_data.get(mockup_name, {})
 
-    def update_mockup_config(self, mockup_name, x, y, size):
+    def update_mockup_config(self, mockup_name, x, y, size, opacity=100.0):
         if mockup_name not in self.config_data:
             self.config_data[mockup_name] = {}
         self.config_data[mockup_name]['x'] = x
         self.config_data[mockup_name]['y'] = y
         self.config_data[mockup_name]['size'] = size
-        print(f"Updated config for {mockup_name}: X={x}, Y={y}, Size={size}")
+        self.config_data[mockup_name]['opacity'] = opacity
+        print(f"Updated config for {mockup_name}: X={x}, Y={y}, Size={size}, Opacity={opacity}")
         # Auto-save sẽ được gọi từ controller sau khi update này
 
     def get_aspect_ratio(self):

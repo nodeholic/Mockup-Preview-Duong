@@ -1,7 +1,7 @@
 # app/views/main_view.py
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
-from PIL import Image, ImageTk # Thêm import cho Pillow
+from PIL import Image, ImageTk, ImageEnhance # Thêm ImageEnhance
 
 class MainView(ttk.Frame):
     def __init__(self, parent):
@@ -43,13 +43,14 @@ class MainView(ttk.Frame):
         self.design_list.current(0)
         self.design_list.pack(fill=tk.X)
 
-        # --- Controls (X, Y, Size) ---
+        # --- Controls (X, Y, Size, Opacity) ---
         controls_frame = ttk.LabelFrame(left_panel, text="Controls", padding="10")
         controls_frame.grid(row=2, column=0, padx=5, pady=5, sticky=(tk.W, tk.E, tk.N))
 
         # Đăng ký các hàm validate mới
         vcmd_xy = (self.register(self._validate_xy_input), '%P')
         vcmd_size = (self.register(self._validate_size_input), '%P')
+        vcmd_opacity = (self.register(self._validate_opacity_input), '%P') # Validate cho opacity
 
         ttk.Label(controls_frame, text="X:").grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
         self.x_var = tk.DoubleVar()
@@ -75,11 +76,20 @@ class MainView(ttk.Frame):
         self.size_entry.grid(row=2, column=2, sticky=tk.E, padx=2, pady=2)
         self.size_entry.bind("<KeyRelease>", self._on_size_entry_changed) # Binding mới
 
+        # Thêm điều khiển Opacity
+        ttk.Label(controls_frame, text="Opacity:").grid(row=3, column=0, sticky=tk.W, padx=2, pady=2)
+        self.opacity_var = tk.DoubleVar(value=100.0)
+        self.opacity_scale = ttk.Scale(controls_frame, from_=0, to=100, orient=tk.HORIZONTAL, variable=self.opacity_var)
+        self.opacity_scale.grid(row=3, column=1, sticky=(tk.W, tk.E), padx=2, pady=2)
+        self.opacity_entry = ttk.Entry(controls_frame, textvariable=self.opacity_var, width=5, name="opacity_entry", validate='key', validatecommand=vcmd_opacity)
+        self.opacity_entry.grid(row=3, column=2, sticky=tk.E, padx=2, pady=2)
+        self.opacity_entry.bind("<KeyRelease>", self._on_opacity_entry_changed) # Binding mới
+
         controls_frame.columnconfigure(1, weight=1)
         
         # --- Output Folder Selection (Task 9.4) ---
         output_frame = ttk.LabelFrame(left_panel, text="Output Settings", padding="10")
-        output_frame.grid(row=3, column=0, padx=5, pady=5, sticky=(tk.W, tk.E, tk.N))
+        output_frame.grid(row=4, column=0, padx=5, pady=5, sticky=(tk.W, tk.E, tk.N))
         
         ttk.Label(output_frame, text="Output Folder:").grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
         self.output_folder_var = tk.StringVar()
@@ -88,17 +98,11 @@ class MainView(ttk.Frame):
         self.browse_output_button = ttk.Button(output_frame, text="Browse...")
         self.browse_output_button.grid(row=1, column=1, sticky=tk.E, padx=2, pady=2)
 
-        # Thêm điều khiển chất lượng JPG
-        ttk.Label(output_frame, text="JPG Quality (0-100):").grid(row=2, column=0, sticky=tk.W, padx=2, pady=(5,2)) # Thêm pady top
-        self.jpg_quality_var = tk.IntVar(value=90)
-        self.jpg_quality_spinbox = ttk.Spinbox(output_frame, from_=0, to=100, textvariable=self.jpg_quality_var, width=5)
-        self.jpg_quality_spinbox.grid(row=2, column=1, sticky=tk.W, padx=2, pady=(5,2)) # sticky W để căn trái, thêm pady top
-
         output_frame.columnconfigure(0, weight=1)
 
         # --- Config Buttons & Generate Button ---
         action_buttons_frame = ttk.Frame(left_panel, padding="5")
-        action_buttons_frame.grid(row=4, column=0, padx=5, pady=5, sticky=(tk.W, tk.E, tk.S))
+        action_buttons_frame.grid(row=5, column=0, padx=5, pady=5, sticky=(tk.W, tk.E, tk.S))
 
         self.save_config_button = ttk.Button(action_buttons_frame, text="Save Config")
         self.save_config_button.pack(side=tk.LEFT, padx=5, pady=5)
@@ -113,7 +117,7 @@ class MainView(ttk.Frame):
         # Task 9.2: Progress Bar
         self.progress_var = tk.DoubleVar()
         self.progress_bar = ttk.Progressbar(left_panel, variable=self.progress_var, maximum=100)
-        self.progress_bar.grid(row=5, column=0, padx=5, pady=(10,5), sticky=(tk.W, tk.E, tk.S))
+        self.progress_bar.grid(row=6, column=0, padx=5, pady=(10,5), sticky=(tk.W, tk.E, tk.S))
 
         # --- Right Panel (Preview) ---
         preview_frame = ttk.LabelFrame(self, text="Preview", padding="10")
@@ -163,6 +167,10 @@ class MainView(ttk.Frame):
             # Gọi hàm trong controller để xử lý thay đổi Size từ Entry
             self.controller.handle_size_entry_change()
 
+    def _on_opacity_entry_changed(self, event=None): # Hàm mới cho opacity entry
+        if self.controller:
+            self.controller.handle_opacity_entry_change()
+
     def _validate_xy_input(self, P_value):
         if P_value == "": 
             return True
@@ -187,6 +195,18 @@ class MainView(ttk.Frame):
         self.bell()
         return False
 
+    def _validate_opacity_input(self, P_value): # Hàm validate mới cho opacity
+        if P_value == "": 
+            return True
+        try:
+            val = float(P_value)
+            if 0.0 <= val <= 100.0: 
+                return True
+        except ValueError:
+            pass
+        self.bell()
+        return False
+
     # Methods để update UI sẽ được thêm ở đây
     def update_mockup_dropdown(self, mockup_files):
         self.mockup_list["values"] = ["All Mockups"] + mockup_files
@@ -206,10 +226,11 @@ class MainView(ttk.Frame):
         else:
             self.design_list.current(0)
 
-    def update_controls(self, x, y, size):
+    def update_controls(self, x, y, size, opacity): # Thêm opacity
         self.x_var.set(float(x))
         self.y_var.set(float(y))
         self.size_var.set(float(size))
+        self.opacity_var.set(float(opacity)) # Đặt giá trị opacity
 
     def get_selected_mockup(self):
         return self.mockup_list_var.get()
@@ -324,6 +345,25 @@ class MainView(ttk.Frame):
                         
                         final_fitted_preview_design.paste(resized_design_for_preview, (paste_preview_x, paste_preview_y))
                         # --- Kết thúc logic Smart Fitting cho Preview ---
+
+                        # Áp dụng Opacity
+                        opacity_percent = self.opacity_var.get() # Lấy % từ 0-100
+                        alpha_value = int((opacity_percent / 100.0) * 255) # Chuyển sang 0-255
+
+                        if final_fitted_preview_design.mode != 'RGBA':
+                             final_fitted_preview_design = final_fitted_preview_design.convert('RGBA')
+                        
+                        alpha = final_fitted_preview_design.split()[3]
+                        # Điều chỉnh kênh alpha của ảnh design đã fit.
+                        # Các pixel hoàn toàn trong suốt (alpha=0) sẽ vẫn trong suốt.
+                        # Các pixel không trong suốt (alpha > 0) sẽ có alpha mới = original_alpha * (opacity_percent / 100)
+                        datas = final_fitted_preview_design.getdata()
+                        newData = []
+                        for item in datas:
+                            # item[3] is the alpha channel
+                            new_alpha = int(item[3] * (opacity_percent / 100.0))
+                            newData.append((item[0], item[1], item[2], new_alpha))
+                        final_fitted_preview_design.putdata(newData)
 
                         self.current_design_image = ImageTk.PhotoImage(final_fitted_preview_design)
                         # Vẽ ảnh design đã được fit (với letterbox/pillarbox nếu cần) lên canvas tại tọa độ của khung đỏ
