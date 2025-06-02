@@ -215,6 +215,14 @@ class MainView(ttk.Frame):
         ttk.Label(business_frame, text="Tags:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
         self.tags_var = tk.StringVar(value="custom, print, design")
         ttk.Entry(business_frame, textvariable=self.tags_var, width=30).grid(row=2, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
+        
+        # Image Domain
+        ttk.Label(business_frame, text="Image Domain:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=2)
+        self.image_domain_var = tk.StringVar(value="https://yourdomain.com/images")
+        ttk.Entry(business_frame, textvariable=self.image_domain_var, width=30).grid(row=3, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
+        
+        # Help text for image domain
+        ttk.Label(business_frame, text="Base URL for product images", font=("TkDefaultFont", 8), foreground="gray").grid(row=4, column=1, sticky=tk.W, padx=5)
 
         business_frame.columnconfigure(1, weight=1)
 

@@ -47,43 +47,42 @@ class ShopifyConfigManager:
         return ''.join(random.choice(characters) for _ in range(length))
 
     def get_default_config(self) -> Dict[str, Any]:
-        """Trả về cấu hình Shopify mặc định với 9 sizes"""
+        """Trả về config mặc định"""
         return {
             "business_info": {
-                "vendor": "Your Business Name",
+                "vendor": "YourStore",
                 "product_type": "T-Shirt",
-                "tags": "custom, print, design"
+                "tags": "custom, print-on-demand",
+                "image_domain": "https://yourdomain.com/images"  # Domain để tạo link ảnh
             },
             "size_configs": {
                 "XS": {"price": "19.99", "compare_price": "", "sku_suffix": "XS"},
                 "S": {"price": "19.99", "compare_price": "", "sku_suffix": "S"},
                 "M": {"price": "19.99", "compare_price": "", "sku_suffix": "M"},
                 "L": {"price": "19.99", "compare_price": "", "sku_suffix": "L"},
-                "XL": {"price": "19.99", "compare_price": "", "sku_suffix": "XL"},
-                "2XL": {"price": "20.99", "compare_price": "", "sku_suffix": "2XL"},
-                "3XL": {"price": "21.99", "compare_price": "", "sku_suffix": "3XL"},
-                "4XL": {"price": "22.99", "compare_price": "", "sku_suffix": "4XL"},
+                "XL": {"price": "21.99", "compare_price": "", "sku_suffix": "XL"},
+                "2XL": {"price": "22.99", "compare_price": "", "sku_suffix": "2XL"},
+                "3XL": {"price": "23.99", "compare_price": "", "sku_suffix": "3XL"},
+                "4XL": {"price": "23.99", "compare_price": "", "sku_suffix": "4XL"},
                 "5XL": {"price": "23.99", "compare_price": "", "sku_suffix": "5XL"}
             },
-            "colors": ["Charcoal", "Dark Heather", "Navy", "Red", "Royal", "Sport Grey", "Black", "Forest Green", "Purple", "Maroon", "Sand"],
+            "colors": [
+                "Charcoal", "Dark Heather", "Navy", "Red", "Royal", "Sport Grey", 
+                "Black", "Forest Green", "Purple", "Maroon", "Sand"
+            ],
             "sku_pattern": "{randomstring}-{color}-{size}",
-            "description_template": """High-quality {product_type} with custom {design} design.
-
-Features:
-- Premium material
-- Comfortable fit
-- Durable print
-- Available in multiple sizes and colors
-
-Size: {size}
-Color: {color}"""
+            "description_template": "Premium quality {product_type} featuring '{design}' design in {color}. Available in size {size}. Perfect for casual wear and expressing your unique style."
         }
 
     def get_business_info(self) -> Dict[str, str]:
         """Lấy thông tin business"""
         return self.config_data.get("business_info", {})
 
-    def update_business_info(self, vendor: str, product_type: str, tags: str):
+    def get_image_domain(self) -> str:
+        """Lấy domain để tạo link ảnh"""
+        return self.config_data.get("business_info", {}).get("image_domain", "")
+
+    def update_business_info(self, vendor: str, product_type: str, tags: str, image_domain: str = ""):
         """Cập nhật thông tin business"""
         if "business_info" not in self.config_data:
             self.config_data["business_info"] = {}
@@ -91,6 +90,7 @@ Color: {color}"""
         self.config_data["business_info"]["vendor"] = vendor
         self.config_data["business_info"]["product_type"] = product_type
         self.config_data["business_info"]["tags"] = tags
+        self.config_data["business_info"]["image_domain"] = image_domain
         print(f"Updated business info: vendor={vendor}, type={product_type}, tags={tags}")
 
     def get_size_configs(self) -> Dict[str, Dict[str, str]]:

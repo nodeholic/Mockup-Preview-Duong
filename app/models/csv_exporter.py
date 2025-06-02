@@ -31,7 +31,7 @@ class ShopifyCSVExporter:
         ]
 
     def generate_product_data(self, design_name: str, mockup_files: List[str], 
-                            output_folder: str) -> List[Dict[str, Any]]:
+                            output_folder: str, mockup_templates: List[str] = None) -> List[Dict[str, Any]]:
         """Tạo dữ liệu sản phẩm cho một design - chỉ tạo variants cho sizes có price"""
         business_info = self.shopify_config.get_business_info()
         colors = self.shopify_config.get_colors()
@@ -51,6 +51,34 @@ class ShopifyCSVExporter:
         # Handle bao gồm design name + random string để unique
         handle = f"{design_base.lower().replace(' ', '-').replace('_', '-')}-{product_random_string}"
         
+        # Tìm đúng images tương ứng với mockup templates cho design này
+        image_domain = self.shopify_config.get_image_domain()
+        matching_images = []
+        
+        if mockup_templates:
+            # Lấy đúng 1 image cho mỗi mockup template
+            for template in mockup_templates:
+                template_base = os.path.splitext(template)[0]  # Tên template không có extension
+                
+                # Tìm image file tương ứng trong output
+                for mockup_file in mockup_files:
+                    # Check if this mockup file contains both template name and design name
+                    if (template_base.lower() in mockup_file.lower() and 
+                        design_base.lower() in mockup_file.lower()):
+                        
+                        # Tạo link ảnh với domain nếu có
+                        if image_domain:
+                            filename = os.path.basename(mockup_file)
+                            image_url = f"{image_domain.rstrip('/')}/{filename}"
+                        else:
+                            image_url = os.path.join(output_folder, mockup_file).replace("\\", "/")
+                        
+                        matching_images.append(image_url)
+                        break  # Chỉ lấy 1 image đầu tiên match cho template này
+        
+        if matching_images:
+            print(f"Found {len(matching_images)} images for design '{design_base}' (expected: {len(mockup_templates) if mockup_templates else 'unknown'})")
+        
         rows = []
         variant_position = 1
         
@@ -68,13 +96,17 @@ class ShopifyCSVExporter:
                 # Tạo product title
                 product_title = f"{design_base} - {business_info.get('product_type', 'T-Shirt')}"
                 
-                # Tìm image tương ứng với design này
+                # Xác định image cho dòng này (độc lập với variation)
+                # Dòng 1 -> Image 1, Dòng 2 -> Image 2, etc.
+                row_image_index = variant_position - 1  # 0-based index
                 image_src = ""
-                for mockup_file in mockup_files:
-                    if design_base.lower() in mockup_file.lower():
-                        # Tạo đường dẫn tương đối từ output folder
-                        image_src = os.path.join(output_folder, mockup_file).replace("\\", "/")
-                        break
+                image_position = ""
+                # image_alt = ""
+                
+                if row_image_index < len(matching_images):
+                    image_src = matching_images[row_image_index]
+                    image_position = str(row_image_index + 1)  # 1-based position
+                    # image_alt = f"Image {row_image_index + 1} for {design_base}"
                 
                 # Tạo row data theo format mẫu
                 row = {
@@ -105,9 +137,9 @@ class ShopifyCSVExporter:
                     "Variant Requires Shipping": "TRUE",
                     "Variant Taxable": "TRUE",
                     "Variant Barcode": "",
-                    "Image Src": image_src if variant_position == 1 else "",
-                    "Image Position": "1" if variant_position == 1 else "",
-                    "Image Alt Text": "" if variant_position == 1 else "",
+                    "Image Src": image_src,
+                    "Image Position": image_position,
+                    # "Image Alt Text": image_alt,
                     "Gift Card": "FALSE",
                     "SEO Title": "",
                     "SEO Description": "",
@@ -152,7 +184,8 @@ class ShopifyCSVExporter:
         )
 
     def export_csv(self, design_names: List[str], mockup_files: List[str], 
-                   output_folder: str, csv_filename: str = "shopify_products.csv") -> str:
+                   output_folder: str, csv_filename: str = "shopify_products.csv",
+                   mockup_templates: List[str] = None) -> str:
         """Xuất CSV cho tất cả designs"""
         csv_path = os.path.join(output_folder, csv_filename)
         
@@ -163,7 +196,7 @@ class ShopifyCSVExporter:
                 writer.writeheader()
                 
                 for design_name in design_names:
-                    product_rows = self.generate_product_data(design_name, mockup_files, output_folder)
+                    product_rows = self.generate_product_data(design_name, mockup_files, output_folder, mockup_templates)
                     for row in product_rows:
                         writer.writerow(row)
             
@@ -175,7 +208,8 @@ class ShopifyCSVExporter:
             raise e
 
     def preview_csv_data(self, design_names: List[str], mockup_files: List[str], 
-                        output_folder: str, max_rows: int = 10) -> List[Dict[str, Any]]:
+                        output_folder: str, max_rows: int = 10,
+                        mockup_templates: List[str] = None) -> List[Dict[str, Any]]:
         """Xem trước dữ liệu CSV (để hiển thị trong UI)"""
         preview_data = []
         row_count = 0
@@ -184,7 +218,7 @@ class ShopifyCSVExporter:
             if row_count >= max_rows:
                 break
                 
-            product_rows = self.generate_product_data(design_name, mockup_files, output_folder)
+            product_rows = self.generate_product_data(design_name, mockup_files, output_folder, mockup_templates)
             for row in product_rows:
                 if row_count >= max_rows:
                     break

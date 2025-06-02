@@ -689,6 +689,14 @@ class MainController:
         except:
             return []
 
+    def get_mockup_templates(self):
+        """Lấy danh sách mockup templates từ thư mục mockups"""
+        try:
+            mockup_files = self.scan_directory(self.mockups_dir)
+            return mockup_files
+        except:
+            return []
+
     def preview_csv(self):
         """Xem trước CSV data"""
         try:
@@ -705,8 +713,11 @@ class MainController:
             # Lấy mockup files có sẵn (giả sử đã generate)
             mockup_files = self.get_generated_mockup_files(output_folder)
             
+            # Lấy mockup templates
+            mockup_templates = self.get_mockup_templates()
+            
             # Preview data
-            preview_data = self.csv_exporter.preview_csv_data(design_names, mockup_files, output_folder, max_rows=5)
+            preview_data = self.csv_exporter.preview_csv_data(design_names, mockup_files, output_folder, max_rows=5, mockup_templates=mockup_templates)
             
             # Hiển thị preview window
             self.show_csv_preview_window(preview_data)
@@ -777,8 +788,11 @@ class MainController:
                 self.view.show_error("Export Error", "Không tìm thấy mockup files trong output folder.\nVui lòng generate mockups trước.")
                 return
 
+            # Lấy mockup templates
+            mockup_templates = self.get_mockup_templates()
+
             # Export CSV
-            csv_path = self.csv_exporter.export_csv(design_names, mockup_files, output_folder)
+            csv_path = self.csv_exporter.export_csv(design_names, mockup_files, output_folder, mockup_templates=mockup_templates)
             
             # Hiển thị thống kê
             summary = self.csv_exporter.get_export_summary(design_names)
@@ -819,7 +833,8 @@ class MainController:
                     
                     # Step 2: Export CSV
                     mockup_files = self.get_generated_mockup_files(output_folder)
-                    csv_path = self.csv_exporter.export_csv(design_names, mockup_files, output_folder)
+                    mockup_templates = self.get_mockup_templates()
+                    csv_path = self.csv_exporter.export_csv(design_names, mockup_files, output_folder, mockup_templates=mockup_templates)
                     
                     # Show success message
                     summary = self.csv_exporter.get_export_summary(design_names)
@@ -850,7 +865,8 @@ class MainController:
             vendor = self.view.vendor_var.get()
             product_type = self.view.product_type_var.get()
             tags = self.view.tags_var.get()
-            self.shopify_config.update_business_info(vendor, product_type, tags)
+            image_domain = self.view.image_domain_var.get()
+            self.shopify_config.update_business_info(vendor, product_type, tags, image_domain)
             
             # Size configs
             for size, config_vars in self.view.size_configs.items():
@@ -890,6 +906,7 @@ class MainController:
             self.view.vendor_var.set(business_info.get("vendor", ""))
             self.view.product_type_var.set(business_info.get("product_type", ""))
             self.view.tags_var.set(business_info.get("tags", ""))
+            self.view.image_domain_var.set(business_info.get("image_domain", "https://yourdomain.com/images"))
             
             # Size configs
             size_configs = self.shopify_config.get_size_configs()

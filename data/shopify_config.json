@@ -2,7 +2,8 @@
     "business_info": {
         "vendor": "Your Business Name",
         "product_type": "T-Shirt",
-        "tags": "custom, print, design"
+        "tags": "custom, print, design",
+        "image_domain": "https://linhanh.com/images"
     },
     "size_configs": {
         "XS": {
