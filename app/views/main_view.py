@@ -230,9 +230,9 @@ class MainView(ttk.Frame):
         
         # Size configurations
         self.size_configs = {}
-        sizes = ["S", "M", "L", "XL", "XXL"]
-        default_prices = ["25.00", "25.00", "25.00", "28.00", "30.00"]
-        default_compare_prices = ["30.00", "30.00", "30.00", "33.00", "35.00"]
+        sizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"]
+        default_prices = ["19.99", "19.99", "19.99", "19.99", "19.99", "20.99", "21.99", "22.99", "23.99"]
+        default_compare_prices = ["", "", "", "", "", "", "", "", ""]
         
         for i, size in enumerate(sizes):
             row = i + 1
@@ -240,7 +240,7 @@ class MainView(ttk.Frame):
             
             price_var = tk.StringVar(value=default_prices[i])
             compare_price_var = tk.StringVar(value=default_compare_prices[i])
-            sku_suffix_var = tk.StringVar(value=size.lower())
+            sku_suffix_var = tk.StringVar(value=size)
             
             ttk.Entry(size_price_frame, textvariable=price_var, width=10).grid(row=row, column=1, padx=5, pady=2)
             ttk.Entry(size_price_frame, textvariable=compare_price_var, width=10).grid(row=row, column=2, padx=5, pady=2)
@@ -257,7 +257,7 @@ class MainView(ttk.Frame):
         color_frame.pack(fill=tk.X, pady=5)
         
         ttk.Label(color_frame, text="Available Colors (comma separated):").pack(anchor=tk.W)
-        self.colors_var = tk.StringVar(value="Black, White, Navy, Red, Grey")
+        self.colors_var = tk.StringVar(value="Charcoal, Dark Heather, Navy, Red, Royal, Sport Grey, Black, Forest Green, Purple, Maroon, Sand")
         colors_entry = tk.Text(color_frame, height=3, width=50)
         colors_entry.pack(fill=tk.X, pady=5)
         colors_entry.insert("1.0", self.colors_var.get())
@@ -268,10 +268,10 @@ class MainView(ttk.Frame):
         sku_frame.pack(fill=tk.X, pady=5)
         
         ttk.Label(sku_frame, text="SKU Pattern:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
-        self.sku_pattern_var = tk.StringVar(value="{design}-{color}-{size}")
+        self.sku_pattern_var = tk.StringVar(value="{randomstring}-{color}-{size}")
         ttk.Entry(sku_frame, textvariable=self.sku_pattern_var, width=40).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
         
-        ttk.Label(sku_frame, text="Example: design1-black-m", font=("TkDefaultFont", 8)).grid(row=1, column=1, sticky=tk.W, padx=5)
+        ttk.Label(sku_frame, text="Example: abc123def0-Navy-M", font=("TkDefaultFont", 8)).grid(row=1, column=1, sticky=tk.W, padx=5)
         
         sku_frame.columnconfigure(1, weight=1)
 

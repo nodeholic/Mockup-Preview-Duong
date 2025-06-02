@@ -5,39 +5,65 @@
         "tags": "custom, print, design"
     },
     "size_configs": {
+        "XS": {
+            "price": "19.99",
+            "compare_price": "",
+            "sku_suffix": "XS"
+        },
         "S": {
-            "price": "25.00",
-            "compare_price": "30.00",
-            "sku_suffix": "s"
+            "price": "19.99",
+            "compare_price": "",
+            "sku_suffix": "S"
         },
         "M": {
-            "price": "25.00",
-            "compare_price": "30.00",
-            "sku_suffix": "m"
+            "price": "19.99",
+            "compare_price": "",
+            "sku_suffix": "M"
         },
         "L": {
-            "price": "25.00",
-            "compare_price": "30.00",
-            "sku_suffix": "l"
+            "price": "19.99",
+            "compare_price": "",
+            "sku_suffix": "L"
         },
         "XL": {
-            "price": "28.00",
-            "compare_price": "33.00",
-            "sku_suffix": "xl"
+            "price": "19.99",
+            "compare_price": "",
+            "sku_suffix": "XL"
         },
-        "XXL": {
-            "price": "30.00",
-            "compare_price": "35.00",
-            "sku_suffix": "xxl"
+        "2XL": {
+            "price": "20.99",
+            "compare_price": "",
+            "sku_suffix": "2XL"
+        },
+        "3XL": {
+            "price": "21.99",
+            "compare_price": "",
+            "sku_suffix": "3XL"
+        },
+        "4XL": {
+            "price": "22.99",
+            "compare_price": "",
+            "sku_suffix": "4XL"
+        },
+        "5XL": {
+            "price": "23.99",
+            "compare_price": "",
+            "sku_suffix": "5XL"
         }
     },
     "colors": [
-        "Black",
-        "White",
+        "Charcoal",
+        "Dark Heather",
         "Navy",
         "Red",
-        "Grey"
+        "Royal",
+        "Sport Grey",
+        "Black",
+        "Forest Green",
+        "Purple",
+        "Maroon",
+        "Sand"
     ],
-    "sku_pattern": "{design}-{color}-{size}",
+    "sku_pattern": "{randomstring}-{color}-{size}",
     "description_template": "High-quality {product_type} with custom {design} design.\n\nFeatures:\n- Premium material\n- Comfortable fit\n- Durable print\n- Available in multiple sizes and colors\n\nSize: {size}\nColor: {color}"
 }
