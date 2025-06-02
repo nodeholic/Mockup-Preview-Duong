@@ -1,0 +1,43 @@
+{
+    "business_info": {
+        "vendor": "Your Business Name",
+        "product_type": "T-Shirt",
+        "tags": "custom, print, design"
+    },
+    "size_configs": {
+        "S": {
+            "price": "25.00",
+            "compare_price": "30.00",
+            "sku_suffix": "s"
+        },
+        "M": {
+            "price": "25.00",
+            "compare_price": "30.00",
+            "sku_suffix": "m"
+        },
+        "L": {
+            "price": "25.00",
+            "compare_price": "30.00",
+            "sku_suffix": "l"
+        },
+        "XL": {
+            "price": "28.00",
+            "compare_price": "33.00",
+            "sku_suffix": "xl"
+        },
+        "XXL": {
+            "price": "30.00",
+            "compare_price": "35.00",
+            "sku_suffix": "xxl"
+        }
+    },
+    "colors": [
+        "Black",
+        "White",
+        "Navy",
+        "Red",
+        "Grey"
+    ],
+    "sku_pattern": "{design}-{color}-{size}",
+    "description_template": "High-quality {product_type} with custom {design} design.\n\nFeatures:\n- Premium material\n- Comfortable fit\n- Durable print\n- Available in multiple sizes and colors\n\nSize: {size}\nColor: {color}"
+}

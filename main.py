@@ -3,6 +3,7 @@ import sys # For resource_path
 import os  # For resource_path
 from app.views.main_view import MainView
 from app.models.config_manager import ConfigManager
+from app.models.shopify_config_manager import ShopifyConfigManager
 from app.controllers.main_controller import MainController
 
 def resource_path(relative_path):
@@ -34,13 +35,17 @@ def resource_path(relative_path):
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Mockup Preview Tool")
+        self.title("Mockup Preview Tool with Shopify Export")
         # Đặt kích thước cửa sổ ban đầu, có thể điều chỉnh sau
-        self.geometry("1024x768") 
+        self.geometry("1200x800") 
 
-        # Sử dụng resource_path cho config file
+        # Sử dụng resource_path cho config files
         config_file_path = resource_path("data/config.json")
+        shopify_config_file_path = resource_path("data/shopify_config.json")
+        
+        # Initialize managers
         config_manager = ConfigManager(config_path=config_file_path)
+        shopify_config_manager = ShopifyConfigManager(config_path=shopify_config_file_path)
 
         # 2. Create View
         # MainView bây giờ là một Frame, nó cần một parent là root window (self)
@@ -52,6 +57,12 @@ class App(tk.Tk):
         # 3. Create Controller
         controller = MainController(main_view, config_manager, resource_path)
         main_view.set_controller(controller)
+        
+        # 4. Setup Shopify Integration
+        controller.setup_shopify_integration(shopify_config_manager)
+        
+        # 5. Load Shopify config vào UI
+        controller.load_shopify_config()
 
 if __name__ == "__main__":
     app = App()

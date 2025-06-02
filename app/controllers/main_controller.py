@@ -9,6 +9,10 @@ from PIL import Image, ImageOps, ImageEnhance # Thêm ImageEnhance
 # from app.views.main_view import MainView (Sẽ import trong App)
 # from app.models.config_manager import ConfigManager (Sẽ import trong App)
 
+# Import Shopify models
+from app.models.shopify_config_manager import ShopifyConfigManager
+from app.models.csv_exporter import ShopifyCSVExporter
+
 # Define fixed output size (Task: Fixed output size)
 OUTPUT_WIDTH = 1200
 OUTPUT_HEIGHT = 1200
@@ -648,3 +652,279 @@ class MainController:
     # --- Other batch functions (12.3, 12.4) can be added here ---
     # def generate_batch_one_mockup_all_designs(...)
     # def generate_batch_all_combinations(...) 
+
+    # --- Shopify Integration Methods ---
+    def setup_shopify_integration(self, shopify_config_manager):
+        """Thiết lập tích hợp Shopify"""
+        self.shopify_config = shopify_config_manager
+        self.csv_exporter = ShopifyCSVExporter(self.shopify_config)
+        self._setup_shopify_event_handlers()
+
+    def _setup_shopify_event_handlers(self):
+        """Thiết lập event handlers cho Shopify functionality"""
+        # Tab 1 - Shopify Export buttons
+        self.view.preview_csv_button.config(command=self.preview_csv)
+        self.view.generate_only_button.config(command=self.generate_mockups_only)
+        self.view.export_csv_only_button.config(command=self.export_csv_only)
+        self.view.generate_and_export_button.config(command=self.generate_and_export_all)
+        
+        # Tab 2 - Config buttons
+        self.view.save_shopify_config_button.config(command=self.save_shopify_config)
+        self.view.load_shopify_config_button.config(command=self.load_shopify_config)
+        self.view.reset_shopify_config_button.config(command=self.reset_shopify_config)
+
+    def get_selected_designs_for_export(self):
+        """Lấy danh sách designs được chọn để export"""
+        selected_design = self.view.get_selected_design()
+        if selected_design == "All Designs":
+            return self.scan_directory(self.designs_dir)
+        else:
+            return [selected_design] if selected_design else []
+
+    def get_generated_mockup_files(self, output_folder):
+        """Lấy danh sách file mockup đã generate trong output folder"""
+        try:
+            files = [f for f in os.listdir(output_folder) if f.lower().endswith(('.jpg', '.png'))]
+            return files
+        except:
+            return []
+
+    def preview_csv(self):
+        """Xem trước CSV data"""
+        try:
+            design_names = self.get_selected_designs_for_export()
+            if not design_names:
+                self.view.show_error("Preview Error", "Vui lòng chọn design để preview.")
+                return
+
+            output_folder = self.view.output_folder_var.get()
+            if not output_folder:
+                self.view.show_error("Preview Error", "Vui lòng chọn output folder.")
+                return
+
+            # Lấy mockup files có sẵn (giả sử đã generate)
+            mockup_files = self.get_generated_mockup_files(output_folder)
+            
+            # Preview data
+            preview_data = self.csv_exporter.preview_csv_data(design_names, mockup_files, output_folder, max_rows=5)
+            
+            # Hiển thị preview window
+            self.show_csv_preview_window(preview_data)
+            
+        except Exception as e:
+            self.view.show_error("Preview Error", f"Lỗi khi preview CSV: {e}")
+
+    def show_csv_preview_window(self, preview_data):
+        """Hiển thị window preview CSV data"""
+        preview_window = tk.Toplevel(self.view.parent)
+        preview_window.title("CSV Preview")
+        preview_window.geometry("800x400")
+        
+        # Create text widget with scrollbar
+        text_frame = tk.Frame(preview_window)
+        text_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        text_widget = tk.Text(text_frame, wrap=tk.NONE)
+        v_scrollbar = tk.Scrollbar(text_frame, orient=tk.VERTICAL, command=text_widget.yview)
+        h_scrollbar = tk.Scrollbar(text_frame, orient=tk.HORIZONTAL, command=text_widget.xview)
+        
+        text_widget.config(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+        
+        text_widget.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        h_scrollbar.grid(row=1, column=0, sticky=(tk.W, tk.E))
+        
+        text_frame.columnconfigure(0, weight=1)
+        text_frame.rowconfigure(0, weight=1)
+        
+        # Format and display data
+        if preview_data:
+            # Headers
+            headers = list(preview_data[0].keys())
+            header_line = "\t".join(headers) + "\n"
+            text_widget.insert(tk.END, header_line)
+            
+            # Data rows
+            for row in preview_data:
+                data_line = "\t".join(str(row.get(header, "")) for header in headers) + "\n"
+                text_widget.insert(tk.END, data_line)
+        else:
+            text_widget.insert(tk.END, "Không có dữ liệu để hiển thị.")
+        
+        text_widget.config(state=tk.DISABLED)
+
+    def generate_mockups_only(self):
+        """Generate mockups only (không export CSV)"""
+        self.on_generate_button_pressed()
+
+    def export_csv_only(self):
+        """Export CSV only (không generate mockups)"""
+        try:
+            design_names = self.get_selected_designs_for_export()
+            if not design_names:
+                self.view.show_error("Export Error", "Vui lòng chọn design để export.")
+                return
+
+            output_folder = self.view.output_folder_var.get()
+            if not output_folder:
+                self.view.show_error("Export Error", "Vui lòng chọn output folder.")
+                return
+
+            # Lấy mockup files có sẵn
+            mockup_files = self.get_generated_mockup_files(output_folder)
+            
+            if not mockup_files:
+                self.view.show_error("Export Error", "Không tìm thấy mockup files trong output folder.\nVui lòng generate mockups trước.")
+                return
+
+            # Export CSV
+            csv_path = self.csv_exporter.export_csv(design_names, mockup_files, output_folder)
+            
+            # Hiển thị thống kê
+            summary = self.csv_exporter.get_export_summary(design_names)
+            message = f"CSV đã được export thành công!\n\nFile: {csv_path}\n\nThống kê:\n- {summary['total_designs']} designs\n- {summary['total_variants']} variants\n- {summary['total_products']} products"
+            self.view.show_info("Export Success", message)
+            
+        except Exception as e:
+            self.view.show_error("Export Error", f"Lỗi khi export CSV: {e}")
+
+    def generate_and_export_all(self):
+        """Generate mockups và export CSV trong một workflow"""
+        try:
+            output_folder = self.view.output_folder_var.get()
+            if not output_folder:
+                self.view.show_error("Export Error", "Vui lòng chọn output folder.")
+                return
+
+            design_names = self.get_selected_designs_for_export()
+            if not design_names:
+                self.view.show_error("Export Error", "Vui lòng chọn design để process.")
+                return
+
+            # Hiển thị thông báo bắt đầu
+            self.view.show_info("Process Started", "Bắt đầu generate mockups và export CSV...")
+            
+            # Disable buttons
+            self.view.generate_and_export_button.config(state=tk.DISABLED)
+            
+            # Chạy trong thread để không block UI
+            def process_thread():
+                try:
+                    # Step 1: Generate mockups
+                    self.view.after(0, lambda: self.view.progress_bar.config(mode='indeterminate'))
+                    self.view.after(0, self.view.progress_bar.start)
+                    
+                    # Generate tất cả combinations
+                    self.generate_batch_all_combinations(output_folder, threaded=False)
+                    
+                    # Step 2: Export CSV
+                    mockup_files = self.get_generated_mockup_files(output_folder)
+                    csv_path = self.csv_exporter.export_csv(design_names, mockup_files, output_folder)
+                    
+                    # Show success message
+                    summary = self.csv_exporter.get_export_summary(design_names)
+                    message = f"Process hoàn thành!\n\nMockups và CSV đã được tạo trong:\n{output_folder}\n\nThống kê:\n- {summary['total_designs']} designs\n- {summary['total_variants']} variants\n- {summary['total_products']} products"
+                    
+                    self.view.after(0, lambda: self.view.show_info("Process Complete", message))
+                    
+                except Exception as e:
+                    self.view.after(0, lambda: self.view.show_error("Process Error", f"Lỗi trong quá trình xử lý: {e}"))
+                finally:
+                    # Re-enable buttons
+                    self.view.after(0, lambda: self.view.generate_and_export_button.config(state=tk.NORMAL))
+                    self.view.after(0, self.view.progress_bar.stop)
+                    self.view.after(0, lambda: self.view.progress_bar.config(mode='determinate'))
+                    self.view.after(0, self.view.reset_progress)
+            
+            # Start thread
+            thread = threading.Thread(target=process_thread, daemon=True)
+            thread.start()
+            
+        except Exception as e:
+            self.view.show_error("Process Error", f"Lỗi khi bắt đầu process: {e}")
+
+    def save_shopify_config(self):
+        """Lưu Shopify configuration từ UI"""
+        try:
+            # Business info
+            vendor = self.view.vendor_var.get()
+            product_type = self.view.product_type_var.get()
+            tags = self.view.tags_var.get()
+            self.shopify_config.update_business_info(vendor, product_type, tags)
+            
+            # Size configs
+            for size, config_vars in self.view.size_configs.items():
+                price = config_vars['price'].get()
+                compare_price = config_vars['compare_price'].get()
+                sku_suffix = config_vars['sku_suffix'].get()
+                self.shopify_config.update_size_config(size, price, compare_price, sku_suffix)
+            
+            # Colors
+            colors_text = self.view.colors_text.get("1.0", tk.END).strip()
+            colors = [color.strip() for color in colors_text.split(",") if color.strip()]
+            self.shopify_config.update_colors(colors)
+            
+            # SKU pattern
+            sku_pattern = self.view.sku_pattern_var.get()
+            self.shopify_config.update_sku_pattern(sku_pattern)
+            
+            # Description template
+            description = self.view.description_text.get("1.0", tk.END).strip()
+            self.shopify_config.update_description_template(description)
+            
+            # Save to file
+            self.shopify_config.save_config()
+            
+            self.view.show_info("Config Saved", "Shopify configuration đã được lưu thành công!")
+            
+        except Exception as e:
+            self.view.show_error("Save Error", f"Lỗi khi lưu Shopify config: {e}")
+
+    def load_shopify_config(self):
+        """Load Shopify configuration vào UI"""
+        try:
+            self.shopify_config.load_config()
+            
+            # Business info
+            business_info = self.shopify_config.get_business_info()
+            self.view.vendor_var.set(business_info.get("vendor", ""))
+            self.view.product_type_var.set(business_info.get("product_type", ""))
+            self.view.tags_var.set(business_info.get("tags", ""))
+            
+            # Size configs
+            size_configs = self.shopify_config.get_size_configs()
+            for size, config_vars in self.view.size_configs.items():
+                if size in size_configs:
+                    config_vars['price'].set(size_configs[size].get("price", ""))
+                    config_vars['compare_price'].set(size_configs[size].get("compare_price", ""))
+                    config_vars['sku_suffix'].set(size_configs[size].get("sku_suffix", ""))
+            
+            # Colors
+            colors = self.shopify_config.get_colors()
+            colors_text = ", ".join(colors)
+            self.view.colors_text.delete("1.0", tk.END)
+            self.view.colors_text.insert("1.0", colors_text)
+            
+            # SKU pattern
+            sku_pattern = self.shopify_config.get_sku_pattern()
+            self.view.sku_pattern_var.set(sku_pattern)
+            
+            # Description template
+            description = self.shopify_config.get_description_template()
+            self.view.description_text.delete("1.0", tk.END)
+            self.view.description_text.insert("1.0", description)
+            
+            self.view.show_info("Config Loaded", "Shopify configuration đã được load thành công!")
+            
+        except Exception as e:
+            self.view.show_error("Load Error", f"Lỗi khi load Shopify config: {e}")
+
+    def reset_shopify_config(self):
+        """Reset Shopify config về mặc định"""
+        try:
+            self.shopify_config.reset_to_default()
+            self.load_shopify_config()  # Reload UI với config mặc định
+            self.view.show_info("Config Reset", "Shopify configuration đã được reset về mặc định!")
+            
+        except Exception as e:
+            self.view.show_error("Reset Error", f"Lỗi khi reset Shopify config: {e}") 

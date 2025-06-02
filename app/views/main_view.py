@@ -20,10 +20,31 @@ class MainView(ttk.Frame):
         self.displayed_mockup_offset_x = 0
         self.displayed_mockup_offset_y = 0
 
+        # Tạo Notebook cho tabs
+        self.notebook = ttk.Notebook(self)
+        self.notebook.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        
+        # Tab 1: Main Workspace (Mockup Designer + Shopify Export)
+        self.tab1 = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab1, text="Main")
+        
+        # Tab 2: Configuration
+        self.tab2 = ttk.Frame(self.notebook)
+        self.notebook.add(self.tab2, text="Config")
+        
+        self.create_main_tab()
+        self.create_config_tab()
+        
+        # Configure main frame to resize
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+
+    def create_main_tab(self):
+        """Tạo Tab 1 - Main Workspace với mockup controls + Shopify export"""
         # --- Left Panel (Controls) ---
-        left_panel = ttk.Frame(self, padding="5")
+        left_panel = ttk.Frame(self.tab1, padding="5")
         left_panel.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        left_panel.rowconfigure(3, weight=1) # Allow controls_frame to expand if needed
+        left_panel.rowconfigure(6, weight=1) # Allow expansion
 
         # --- Mockup Selection ---
         mockup_frame = ttk.LabelFrame(left_panel, text="Mockups", padding="10")
@@ -44,7 +65,7 @@ class MainView(ttk.Frame):
         self.design_list.pack(fill=tk.X)
 
         # --- Controls (X, Y, Size, Opacity) ---
-        controls_frame = ttk.LabelFrame(left_panel, text="Controls", padding="10")
+        controls_frame = ttk.LabelFrame(left_panel, text="Position Controls", padding="10")
         controls_frame.grid(row=2, column=0, padx=5, pady=5, sticky=(tk.W, tk.E, tk.N))
 
         # Đăng ký các hàm validate mới
@@ -87,71 +108,221 @@ class MainView(ttk.Frame):
 
         controls_frame.columnconfigure(1, weight=1)
         
-        # --- Output Folder Selection (Task 9.4) ---
-        output_frame = ttk.LabelFrame(left_panel, text="Output Settings", padding="10")
-        output_frame.grid(row=4, column=0, padx=5, pady=5, sticky=(tk.W, tk.E, tk.N))
+        # --- Shopify Export Section ---
+        shopify_frame = ttk.LabelFrame(left_panel, text="Shopify Export", padding="10")
+        shopify_frame.grid(row=3, column=0, padx=5, pady=5, sticky=(tk.W, tk.E, tk.N))
         
-        ttk.Label(output_frame, text="Output Folder:").grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
+        # Output folder
+        ttk.Label(shopify_frame, text="Output Folder:").grid(row=0, column=0, sticky=tk.W, padx=2, pady=2)
         self.output_folder_var = tk.StringVar()
-        self.output_folder_entry = ttk.Entry(output_frame, textvariable=self.output_folder_var, width=30)
+        self.output_folder_entry = ttk.Entry(shopify_frame, textvariable=self.output_folder_var, width=25)
         self.output_folder_entry.grid(row=1, column=0, sticky=(tk.W, tk.E), padx=2, pady=2)
-        self.browse_output_button = ttk.Button(output_frame, text="Browse...")
+        self.browse_output_button = ttk.Button(shopify_frame, text="Browse...")
         self.browse_output_button.grid(row=1, column=1, sticky=tk.E, padx=2, pady=2)
+        
+        # Export buttons
+        export_buttons_frame = ttk.Frame(shopify_frame)
+        export_buttons_frame.grid(row=2, column=0, columnspan=2, pady=10, sticky=(tk.W, tk.E))
+        
+        self.preview_csv_button = ttk.Button(export_buttons_frame, text="Preview CSV")
+        self.preview_csv_button.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
+        
+        export_buttons_frame2 = ttk.Frame(shopify_frame)
+        export_buttons_frame2.grid(row=3, column=0, columnspan=2, pady=5, sticky=(tk.W, tk.E))
+        
+        self.generate_only_button = ttk.Button(export_buttons_frame2, text="Generate Mockups Only")
+        self.generate_only_button.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
+        
+        self.export_csv_only_button = ttk.Button(export_buttons_frame2, text="Export CSV Only")
+        self.export_csv_only_button.pack(side=tk.LEFT, padx=2, fill=tk.X, expand=True)
+        
+        # Main action button
+        self.generate_and_export_button = ttk.Button(shopify_frame, text="🚀 GENERATE + EXPORT ALL", style="Accent.TButton")
+        self.generate_and_export_button.grid(row=4, column=0, columnspan=2, pady=10, sticky=(tk.W, tk.E))
 
-        output_frame.columnconfigure(0, weight=1)
+        shopify_frame.columnconfigure(0, weight=1)
 
-        # --- Config Buttons & Generate Button ---
-        action_buttons_frame = ttk.Frame(left_panel, padding="5")
-        action_buttons_frame.grid(row=5, column=0, padx=5, pady=5, sticky=(tk.W, tk.E, tk.S))
+        # --- Config Buttons (moved from old action_buttons_frame) ---
+        config_buttons_frame = ttk.Frame(left_panel, padding="5")
+        config_buttons_frame.grid(row=4, column=0, padx=5, pady=5, sticky=(tk.W, tk.E))
 
-        self.save_config_button = ttk.Button(action_buttons_frame, text="Save Config")
+        self.save_config_button = ttk.Button(config_buttons_frame, text="Save Config")
         self.save_config_button.pack(side=tk.LEFT, padx=5, pady=5)
 
-        self.load_config_button = ttk.Button(action_buttons_frame, text="Load Config")
+        self.load_config_button = ttk.Button(config_buttons_frame, text="Load Config")
         self.load_config_button.pack(side=tk.LEFT, padx=5, pady=5)
 
-        # Task 9.1: Generate Button
-        self.generate_button = ttk.Button(action_buttons_frame, text="Generate Image", style="Accent.TButton") # Added style
+        # Keep original Generate Button (for backward compatibility)
+        self.generate_button = ttk.Button(config_buttons_frame, text="Generate Image")
         self.generate_button.pack(side=tk.LEFT, padx=10, pady=5, expand=True, fill=tk.X)
 
-        # Task 9.2: Progress Bar
+        # --- Progress Bar ---
         self.progress_var = tk.DoubleVar()
         self.progress_bar = ttk.Progressbar(left_panel, variable=self.progress_var, maximum=100)
-        self.progress_bar.grid(row=6, column=0, padx=5, pady=(10,5), sticky=(tk.W, tk.E, tk.S))
+        self.progress_bar.grid(row=5, column=0, padx=5, pady=(10,5), sticky=(tk.W, tk.E))
 
         # --- Right Panel (Preview) ---
-        preview_frame = ttk.LabelFrame(self, text="Preview", padding="10")
+        preview_frame = ttk.LabelFrame(self.tab1, text="Mockup Preview", padding="10")
         preview_frame.grid(row=0, column=1, sticky=(tk.W, tk.E, tk.N, tk.S))
         self.preview_canvas = tk.Canvas(preview_frame, bg="lightgrey", width=450, height=540)
         self.preview_canvas.pack(expand=True, fill=tk.BOTH)
         
-        # Configure main frame columns/rows to resize
-        self.columnconfigure(0, weight=0) # Left panel fixed width (or based on content)
-        self.columnconfigure(1, weight=1) # Preview panel expands
-        self.rowconfigure(0, weight=1)
+        # Configure tab1 columns/rows to resize
+        self.tab1.columnconfigure(0, weight=0) # Left panel fixed width
+        self.tab1.columnconfigure(1, weight=1) # Preview panel expands
+        self.tab1.rowconfigure(0, weight=1)
 
-        # Style for the Generate button (Accent.TButton might need a theme like 'azure')
-        style = ttk.Style(self.parent) # Get style from parent (root window)
+        # Style for buttons
+        self.setup_styles()
+
+    def create_config_tab(self):
+        """Tạo Tab 2 - Configuration"""
+        # Main container với scrollable frame
+        canvas = tk.Canvas(self.tab2)
+        scrollbar = ttk.Scrollbar(self.tab2, orient="vertical", command=canvas.yview)
+        scrollable_frame = ttk.Frame(canvas)
+
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+        )
+
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        # --- Shopify Configuration Section ---
+        shopify_config_frame = ttk.LabelFrame(scrollable_frame, text="Shopify Configuration", padding="15")
+        shopify_config_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        # Business Info
+        business_frame = ttk.LabelFrame(shopify_config_frame, text="Business Information", padding="10")
+        business_frame.pack(fill=tk.X, pady=5)
+        
+        # Vendor
+        ttk.Label(business_frame, text="Vendor:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        self.vendor_var = tk.StringVar(value="Your Business Name")
+        ttk.Entry(business_frame, textvariable=self.vendor_var, width=30).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
+        
+        # Product Type
+        ttk.Label(business_frame, text="Product Type:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        self.product_type_var = tk.StringVar(value="T-Shirt")
+        ttk.Entry(business_frame, textvariable=self.product_type_var, width=30).grid(row=1, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
+        
+        # Tags
+        ttk.Label(business_frame, text="Tags:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
+        self.tags_var = tk.StringVar(value="custom, print, design")
+        ttk.Entry(business_frame, textvariable=self.tags_var, width=30).grid(row=2, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
+
+        business_frame.columnconfigure(1, weight=1)
+
+        # Size & Price Matrix
+        size_price_frame = ttk.LabelFrame(shopify_config_frame, text="Size & Price Configuration", padding="10")
+        size_price_frame.pack(fill=tk.X, pady=5)
+        
+        # Headers
+        ttk.Label(size_price_frame, text="Size", font=("TkDefaultFont", 9, "bold")).grid(row=0, column=0, padx=5, pady=2)
+        ttk.Label(size_price_frame, text="Price ($)", font=("TkDefaultFont", 9, "bold")).grid(row=0, column=1, padx=5, pady=2)
+        ttk.Label(size_price_frame, text="Compare Price ($)", font=("TkDefaultFont", 9, "bold")).grid(row=0, column=2, padx=5, pady=2)
+        ttk.Label(size_price_frame, text="SKU Suffix", font=("TkDefaultFont", 9, "bold")).grid(row=0, column=3, padx=5, pady=2)
+        
+        # Size configurations
+        self.size_configs = {}
+        sizes = ["S", "M", "L", "XL", "XXL"]
+        default_prices = ["25.00", "25.00", "25.00", "28.00", "30.00"]
+        default_compare_prices = ["30.00", "30.00", "30.00", "33.00", "35.00"]
+        
+        for i, size in enumerate(sizes):
+            row = i + 1
+            ttk.Label(size_price_frame, text=size).grid(row=row, column=0, padx=5, pady=2)
+            
+            price_var = tk.StringVar(value=default_prices[i])
+            compare_price_var = tk.StringVar(value=default_compare_prices[i])
+            sku_suffix_var = tk.StringVar(value=size.lower())
+            
+            ttk.Entry(size_price_frame, textvariable=price_var, width=10).grid(row=row, column=1, padx=5, pady=2)
+            ttk.Entry(size_price_frame, textvariable=compare_price_var, width=10).grid(row=row, column=2, padx=5, pady=2)
+            ttk.Entry(size_price_frame, textvariable=sku_suffix_var, width=10).grid(row=row, column=3, padx=5, pady=2)
+            
+            self.size_configs[size] = {
+                'price': price_var,
+                'compare_price': compare_price_var,
+                'sku_suffix': sku_suffix_var
+            }
+
+        # Color Options
+        color_frame = ttk.LabelFrame(shopify_config_frame, text="Color Configuration", padding="10")
+        color_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(color_frame, text="Available Colors (comma separated):").pack(anchor=tk.W)
+        self.colors_var = tk.StringVar(value="Black, White, Navy, Red, Grey")
+        colors_entry = tk.Text(color_frame, height=3, width=50)
+        colors_entry.pack(fill=tk.X, pady=5)
+        colors_entry.insert("1.0", self.colors_var.get())
+        self.colors_text = colors_entry
+
+        # SKU Pattern
+        sku_frame = ttk.LabelFrame(shopify_config_frame, text="SKU Pattern", padding="10")
+        sku_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(sku_frame, text="SKU Pattern:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        self.sku_pattern_var = tk.StringVar(value="{design}-{color}-{size}")
+        ttk.Entry(sku_frame, textvariable=self.sku_pattern_var, width=40).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
+        
+        ttk.Label(sku_frame, text="Example: design1-black-m", font=("TkDefaultFont", 8)).grid(row=1, column=1, sticky=tk.W, padx=5)
+        
+        sku_frame.columnconfigure(1, weight=1)
+
+        # Description Template
+        desc_frame = ttk.LabelFrame(shopify_config_frame, text="Description Template", padding="10")
+        desc_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(desc_frame, text="Product Description Template:").pack(anchor=tk.W)
+        default_desc = """High-quality {product_type} with custom {design} design.
+
+Features:
+- Premium material
+- Comfortable fit
+- Durable print
+- Available in multiple sizes and colors
+
+Size: {size}
+Color: {color}"""
+        
+        self.description_text = tk.Text(desc_frame, height=8, width=50)
+        self.description_text.pack(fill=tk.X, pady=5)
+        self.description_text.insert("1.0", default_desc)
+
+        # Save/Load Config Buttons
+        config_action_frame = ttk.Frame(shopify_config_frame)
+        config_action_frame.pack(fill=tk.X, pady=10)
+        
+        self.save_shopify_config_button = ttk.Button(config_action_frame, text="Save Shopify Config")
+        self.save_shopify_config_button.pack(side=tk.LEFT, padx=5)
+        
+        self.load_shopify_config_button = ttk.Button(config_action_frame, text="Load Shopify Config") 
+        self.load_shopify_config_button.pack(side=tk.LEFT, padx=5)
+        
+        self.reset_shopify_config_button = ttk.Button(config_action_frame, text="Reset to Default")
+        self.reset_shopify_config_button.pack(side=tk.LEFT, padx=5)
+
+    def setup_styles(self):
+        """Thiết lập styles cho buttons"""
+        style = ttk.Style(self.parent)
         
         available_themes = style.theme_names()
-        # print(f"Available themes: {available_themes}")
-        # print(f"Current theme: {style.theme_use()}")
-
         if 'clam' in available_themes:
             try:
                 style.theme_use('clam')
-                # print("Using 'clam' theme.")
             except tk.TclError:
                 print("Failed to apply 'clam' theme, using default.")
         
         # Configure the Accent.TButton style
-        # Some themes define Accent.TButton, others don't. This provides a fallback.
         style.configure("Accent.TButton", font=("TkDefaultFont", 10, "bold"), 
                         foreground="white", background="#28a745", 
-                        padding=(10, 5)) # Added padding (left/right, top/bottom)
-        
-        # Ensure the button uses this style. The style name was already set during button creation.
-        # self.generate_button.configure(style="Accent.TButton") # Re-apply if needed, but usually not
+                        padding=(10, 5))
 
     def set_controller(self, controller):
         self.controller = controller
