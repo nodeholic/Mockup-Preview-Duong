@@ -539,25 +539,25 @@ class MainController:
     # --- End of Phase 2 Logic ---
 
     # --- Start of Batch Processing Logic (Phase 3) ---
-    def generate_batch_all_mockups_one_design(self, design_name, output_folder, threaded=False):
-        """ Task 8.5 / 12.2: Generate all mockups with the selected design. """
+    def generate_batch_all_mockups_one_design(self, design_name, output_folder, threaded=False, silent=False):
+        """ Task 12.2: Generate all mockups for one specific design. """
         mockup_files = self.scan_directory(self.mockups_dir)
         if not mockup_files:
             self.view.show_error("Batch Generate Error", "No mockup files found.")
             if threaded: self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
             return
-        
+
         total_mockups = len(mockup_files)
-        print(f"Starting batch generation for {total_mockups} mockups with design {design_name}...")
+        print(f"Starting batch generation for ALL {total_mockups} mockups with design '{design_name}'...")
         if threaded: self.view.update_progress(0)
-        
+
         success_count = 0
         processed_count = 0
         for i, mockup_name in enumerate(mockup_files):
             processed_count += 1
             current_progress = (processed_count / total_mockups) * 100
             print(f"Processing mockup {processed_count}/{total_mockups}: {mockup_name} ({current_progress:.2f}%)")
-            
+
             if self.generate_single_image(mockup_name, design_name, output_folder):
                 success_count += 1
             
@@ -566,14 +566,17 @@ class MainController:
             
         final_message = f"Batch generation finished. Successfully generated {success_count}/{processed_count} images."
         print(final_message)
-        if threaded:
-            self.view.after(0, lambda: self.view.show_info("Batch Complete", final_message))
-            self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
-            self.view.after(100, self.view.reset_progress) 
-        else:
-            self.view.show_info("Batch Complete", final_message)
+        
+        # Chỉ hiện alert nếu không phải silent mode
+        if not silent:
+            if threaded:
+                self.view.after(0, lambda: self.view.show_info("Batch Complete", final_message))
+                self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
+                self.view.after(100, self.view.reset_progress) 
+            else:
+                self.view.show_info("Batch Complete", final_message)
 
-    def generate_batch_one_mockup_all_designs(self, mockup_name, output_folder, threaded=False):
+    def generate_batch_one_mockup_all_designs(self, mockup_name, output_folder, threaded=False, silent=False):
         """ Task 12.3: Generate the selected mockup with all available designs. """
         design_files = self.scan_directory(self.designs_dir)
         if not design_files:
@@ -600,14 +603,17 @@ class MainController:
 
         final_message = f"Batch generation finished for mockup '{mockup_name}'.\nSuccessfully generated {success_count}/{processed_count} images."
         print(final_message)
-        if threaded:
-            self.view.after(0, lambda: self.view.show_info("Batch Complete", final_message))
-            self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
-            self.view.after(100, self.view.reset_progress)
-        else:
-            self.view.show_info("Batch Complete", final_message)
+        
+        # Chỉ hiện alert nếu không phải silent mode
+        if not silent:
+            if threaded:
+                self.view.after(0, lambda: self.view.show_info("Batch Complete", final_message))
+                self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
+                self.view.after(100, self.view.reset_progress)
+            else:
+                self.view.show_info("Batch Complete", final_message)
 
-    def generate_batch_all_combinations(self, output_folder, threaded=False):
+    def generate_batch_all_combinations(self, output_folder, threaded=False, silent=False):
         """ Task 12.4: Generate all mockups with all available designs. """
         mockup_files = self.scan_directory(self.mockups_dir)
         design_files = self.scan_directory(self.designs_dir)
@@ -642,16 +648,68 @@ class MainController:
         
         final_message = f"ALL x ALL Batch generation finished.\nSuccessfully generated {success_count}/{processed_count} images."
         print(final_message)
-        if threaded:
-            self.view.after(0, lambda: self.view.show_info("Batch Complete", final_message))
-            self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
-            self.view.after(100, self.view.reset_progress)
-        else:
-            self.view.show_info("Batch Complete", final_message)
+        
+        # Chỉ hiện alert nếu không phải silent mode
+        if not silent:
+            if threaded:
+                self.view.after(0, lambda: self.view.show_info("Batch Complete", final_message))
+                self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
+                self.view.after(100, self.view.reset_progress)
+            else:
+                self.view.show_info("Batch Complete", final_message)
 
-    # --- Other batch functions (12.3, 12.4) can be added here ---
-    # def generate_batch_one_mockup_all_designs(...)
-    # def generate_batch_all_combinations(...) 
+    def generate_and_export_all(self):
+        """Generate mockups và export CSV trong một workflow (không alert)"""
+        try:
+            output_folder = self.view.output_folder_var.get()
+            if not output_folder:
+                self.view.show_error("Export Error", "Vui lòng chọn output folder.")
+                return
+
+            design_names = self.get_selected_designs_for_export()
+            if not design_names:
+                self.view.show_error("Export Error", "Vui lòng chọn design để process.")
+                return
+
+            # Disable buttons (không hiện alert bắt đầu)
+            self.view.generate_and_export_button.config(state=tk.DISABLED)
+            
+            # Chạy trong thread để không block UI
+            def process_thread():
+                try:
+                    # Step 1: Generate mockups (silent mode - không alert)
+                    self.view.after(0, lambda: self.view.progress_bar.config(mode='indeterminate'))
+                    self.view.after(0, self.view.progress_bar.start)
+                    
+                    # Generate tất cả combinations (silent mode)
+                    self.generate_batch_all_combinations(output_folder, threaded=False, silent=True)
+                    
+                    # Step 2: Export CSV
+                    mockup_files = self.get_generated_mockup_files(output_folder)
+                    mockup_templates = self.get_mockup_templates()
+                    csv_path = self.csv_exporter.export_csv(design_names, mockup_files, output_folder, mockup_templates=mockup_templates)
+                    
+                    # Show final success message
+                    summary = self.csv_exporter.get_export_summary(design_names)
+                    message = f"✅ Hoàn thành!\n\nMockups và CSV đã được tạo:\n{output_folder}\n\n📊 Thống kê:\n- {summary['total_designs']} designs\n- {summary['total_variants']} variants\n- {summary['total_products']} products\n\n📄 CSV file: {os.path.basename(csv_path)}"
+                    
+                    self.view.after(0, lambda: self.view.show_info("Process Complete", message))
+                    
+                except Exception as e:
+                    self.view.after(0, lambda: self.view.show_error("Process Error", f"Lỗi trong quá trình xử lý: {e}"))
+                finally:
+                    # Re-enable buttons
+                    self.view.after(0, lambda: self.view.generate_and_export_button.config(state=tk.NORMAL))
+                    self.view.after(0, self.view.progress_bar.stop)
+                    self.view.after(0, lambda: self.view.progress_bar.config(mode='determinate'))
+                    self.view.after(0, self.view.reset_progress)
+            
+            # Start thread
+            thread = threading.Thread(target=process_thread, daemon=True)
+            thread.start()
+            
+        except Exception as e:
+            self.view.show_error("Process Error", f"Lỗi khi bắt đầu process: {e}")
 
     # --- Shopify Integration Methods ---
     def setup_shopify_integration(self, shopify_config_manager):
@@ -801,62 +859,6 @@ class MainController:
             
         except Exception as e:
             self.view.show_error("Export Error", f"Lỗi khi export CSV: {e}")
-
-    def generate_and_export_all(self):
-        """Generate mockups và export CSV trong một workflow"""
-        try:
-            output_folder = self.view.output_folder_var.get()
-            if not output_folder:
-                self.view.show_error("Export Error", "Vui lòng chọn output folder.")
-                return
-
-            design_names = self.get_selected_designs_for_export()
-            if not design_names:
-                self.view.show_error("Export Error", "Vui lòng chọn design để process.")
-                return
-
-            # Hiển thị thông báo bắt đầu
-            self.view.show_info("Process Started", "Bắt đầu generate mockups và export CSV...")
-            
-            # Disable buttons
-            self.view.generate_and_export_button.config(state=tk.DISABLED)
-            
-            # Chạy trong thread để không block UI
-            def process_thread():
-                try:
-                    # Step 1: Generate mockups
-                    self.view.after(0, lambda: self.view.progress_bar.config(mode='indeterminate'))
-                    self.view.after(0, self.view.progress_bar.start)
-                    
-                    # Generate tất cả combinations
-                    self.generate_batch_all_combinations(output_folder, threaded=False)
-                    
-                    # Step 2: Export CSV
-                    mockup_files = self.get_generated_mockup_files(output_folder)
-                    mockup_templates = self.get_mockup_templates()
-                    csv_path = self.csv_exporter.export_csv(design_names, mockup_files, output_folder, mockup_templates=mockup_templates)
-                    
-                    # Show success message
-                    summary = self.csv_exporter.get_export_summary(design_names)
-                    message = f"Process hoàn thành!\n\nMockups và CSV đã được tạo trong:\n{output_folder}\n\nThống kê:\n- {summary['total_designs']} designs\n- {summary['total_variants']} variants\n- {summary['total_products']} products"
-                    
-                    self.view.after(0, lambda: self.view.show_info("Process Complete", message))
-                    
-                except Exception as e:
-                    self.view.after(0, lambda: self.view.show_error("Process Error", f"Lỗi trong quá trình xử lý: {e}"))
-                finally:
-                    # Re-enable buttons
-                    self.view.after(0, lambda: self.view.generate_and_export_button.config(state=tk.NORMAL))
-                    self.view.after(0, self.view.progress_bar.stop)
-                    self.view.after(0, lambda: self.view.progress_bar.config(mode='determinate'))
-                    self.view.after(0, self.view.reset_progress)
-            
-            # Start thread
-            thread = threading.Thread(target=process_thread, daemon=True)
-            thread.start()
-            
-        except Exception as e:
-            self.view.show_error("Process Error", f"Lỗi khi bắt đầu process: {e}")
 
     def save_shopify_config(self):
         """Lưu Shopify configuration từ UI"""

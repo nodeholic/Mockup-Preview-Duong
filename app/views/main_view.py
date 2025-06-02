@@ -152,10 +152,8 @@ class MainView(ttk.Frame):
         self.load_config_button = ttk.Button(config_buttons_frame, text="Load Config")
         self.load_config_button.pack(side=tk.LEFT, padx=5, pady=5)
 
-        # Keep original Generate Button (for backward compatibility)
-        self.generate_button = ttk.Button(config_buttons_frame, text="Generate Image")
-        self.generate_button.pack(side=tk.LEFT, padx=10, pady=5, expand=True, fill=tk.X)
-
+        # Removed duplicate Generate Image button (use Generate Mockups Only instead)
+        
         # --- Progress Bar ---
         self.progress_var = tk.DoubleVar()
         self.progress_bar = ttk.Progressbar(left_panel, variable=self.progress_var, maximum=100)
@@ -174,28 +172,19 @@ class MainView(ttk.Frame):
 
         # Style for buttons
         self.setup_styles()
+        
+        # Alias for backward compatibility with controller
+        self.generate_button = self.generate_only_button
 
     def create_config_tab(self):
-        """Tạo Tab 2 - Configuration"""
-        # Main container với scrollable frame
-        canvas = tk.Canvas(self.tab2)
-        scrollbar = ttk.Scrollbar(self.tab2, orient="vertical", command=canvas.yview)
-        scrollable_frame = ttk.Frame(canvas)
-
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
-        )
-
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        """Tạo Tab 2 - Configuration (simple layout, no scrolling)"""
+        # Simple main frame - no canvas, no scrolling
+        main_frame = ttk.Frame(self.tab2, padding="10")
+        main_frame.pack(fill="both", expand=True)
 
         # --- Shopify Configuration Section ---
-        shopify_config_frame = ttk.LabelFrame(scrollable_frame, text="Shopify Configuration", padding="15")
-        shopify_config_frame.pack(fill=tk.X, padx=10, pady=10)
+        shopify_config_frame = ttk.LabelFrame(main_frame, text="Shopify Configuration", padding="15")
+        shopify_config_frame.pack(fill=tk.X, pady=10)
 
         # Business Info
         business_frame = ttk.LabelFrame(shopify_config_frame, text="Business Information", padding="10")
@@ -226,17 +215,21 @@ class MainView(ttk.Frame):
 
         business_frame.columnconfigure(1, weight=1)
 
-        # Size & Price Matrix
-        size_price_frame = ttk.LabelFrame(shopify_config_frame, text="Size & Price Configuration", padding="10")
-        size_price_frame.pack(fill=tk.X, pady=5)
+        # Two column layout for better space usage
+        middle_frame = ttk.Frame(shopify_config_frame)
+        middle_frame.pack(fill=tk.X, pady=5)
+
+        # Left column - Size & Price Matrix (compact)
+        size_price_frame = ttk.LabelFrame(middle_frame, text="Size & Price Configuration", padding="10")
+        size_price_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         
         # Headers
-        ttk.Label(size_price_frame, text="Size", font=("TkDefaultFont", 9, "bold")).grid(row=0, column=0, padx=5, pady=2)
-        ttk.Label(size_price_frame, text="Price ($)", font=("TkDefaultFont", 9, "bold")).grid(row=0, column=1, padx=5, pady=2)
-        ttk.Label(size_price_frame, text="Compare Price ($)", font=("TkDefaultFont", 9, "bold")).grid(row=0, column=2, padx=5, pady=2)
-        ttk.Label(size_price_frame, text="SKU Suffix", font=("TkDefaultFont", 9, "bold")).grid(row=0, column=3, padx=5, pady=2)
+        ttk.Label(size_price_frame, text="Size", font=("TkDefaultFont", 8, "bold")).grid(row=0, column=0, padx=2, pady=1)
+        ttk.Label(size_price_frame, text="Price", font=("TkDefaultFont", 8, "bold")).grid(row=0, column=1, padx=2, pady=1)
+        ttk.Label(size_price_frame, text="Compare", font=("TkDefaultFont", 8, "bold")).grid(row=0, column=2, padx=2, pady=1)
+        ttk.Label(size_price_frame, text="SKU", font=("TkDefaultFont", 8, "bold")).grid(row=0, column=3, padx=2, pady=1)
         
-        # Size configurations
+        # Size configurations (compact)
         self.size_configs = {}
         sizes = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"]
         default_prices = ["19.99", "19.99", "19.99", "19.99", "19.99", "20.99", "21.99", "22.99", "23.99"]
@@ -244,15 +237,15 @@ class MainView(ttk.Frame):
         
         for i, size in enumerate(sizes):
             row = i + 1
-            ttk.Label(size_price_frame, text=size).grid(row=row, column=0, padx=5, pady=2)
+            ttk.Label(size_price_frame, text=size, font=("TkDefaultFont", 8)).grid(row=row, column=0, padx=2, pady=1)
             
             price_var = tk.StringVar(value=default_prices[i])
             compare_price_var = tk.StringVar(value=default_compare_prices[i])
             sku_suffix_var = tk.StringVar(value=size)
             
-            ttk.Entry(size_price_frame, textvariable=price_var, width=10).grid(row=row, column=1, padx=5, pady=2)
-            ttk.Entry(size_price_frame, textvariable=compare_price_var, width=10).grid(row=row, column=2, padx=5, pady=2)
-            ttk.Entry(size_price_frame, textvariable=sku_suffix_var, width=10).grid(row=row, column=3, padx=5, pady=2)
+            ttk.Entry(size_price_frame, textvariable=price_var, width=8, font=("TkDefaultFont", 8)).grid(row=row, column=1, padx=2, pady=1)
+            ttk.Entry(size_price_frame, textvariable=compare_price_var, width=8, font=("TkDefaultFont", 8)).grid(row=row, column=2, padx=2, pady=1)
+            ttk.Entry(size_price_frame, textvariable=sku_suffix_var, width=6, font=("TkDefaultFont", 8)).grid(row=row, column=3, padx=2, pady=1)
             
             self.size_configs[size] = {
                 'price': price_var,
@@ -260,57 +253,54 @@ class MainView(ttk.Frame):
                 'sku_suffix': sku_suffix_var
             }
 
-        # Color Options
-        color_frame = ttk.LabelFrame(shopify_config_frame, text="Color Configuration", padding="10")
+        # Right column - Color + SKU
+        right_column = ttk.Frame(middle_frame)
+        right_column.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+
+        # Color Options (compact)
+        color_frame = ttk.LabelFrame(right_column, text="Colors", padding="10")
         color_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Label(color_frame, text="Available Colors (comma separated):").pack(anchor=tk.W)
-        self.colors_var = tk.StringVar(value="Charcoal, Dark Heather, Navy, Red, Royal, Sport Grey, Black, Forest Green, Purple, Maroon, Sand")
-        colors_entry = tk.Text(color_frame, height=3, width=50)
-        colors_entry.pack(fill=tk.X, pady=5)
+        ttk.Label(color_frame, text="Available Colors (comma separated):", font=("TkDefaultFont", 8)).pack(anchor=tk.W)
+        self.colors_var = tk.StringVar(value="Charcoal, Dark Heather, Navy, Red, Royal, Sport Grey, Black")
+        colors_entry = tk.Text(color_frame, height=3, width=30, font=("TkDefaultFont", 8))
+        colors_entry.pack(fill=tk.X, pady=2)
         colors_entry.insert("1.0", self.colors_var.get())
         self.colors_text = colors_entry
 
-        # SKU Pattern
-        sku_frame = ttk.LabelFrame(shopify_config_frame, text="SKU Pattern", padding="10")
+        # SKU Pattern (compact)
+        sku_frame = ttk.LabelFrame(right_column, text="SKU Pattern", padding="10")
         sku_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Label(sku_frame, text="SKU Pattern:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(sku_frame, text="Pattern:", font=("TkDefaultFont", 8)).grid(row=0, column=0, sticky=tk.W, padx=2, pady=1)
         self.sku_pattern_var = tk.StringVar(value="{randomstring}-{color}-{size}")
-        ttk.Entry(sku_frame, textvariable=self.sku_pattern_var, width=40).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
+        ttk.Entry(sku_frame, textvariable=self.sku_pattern_var, width=25, font=("TkDefaultFont", 8)).grid(row=0, column=1, sticky=(tk.W, tk.E), padx=2, pady=1)
         
-        ttk.Label(sku_frame, text="Example: abc123def0-Navy-M", font=("TkDefaultFont", 8)).grid(row=1, column=1, sticky=tk.W, padx=5)
+        ttk.Label(sku_frame, text="Example: abc123def0-Navy-M", font=("TkDefaultFont", 7), foreground="gray").grid(row=1, column=1, sticky=tk.W, padx=2)
         
         sku_frame.columnconfigure(1, weight=1)
 
-        # Description Template
+        # Description Template (compact)
         desc_frame = ttk.LabelFrame(shopify_config_frame, text="Description Template", padding="10")
         desc_frame.pack(fill=tk.X, pady=5)
         
-        ttk.Label(desc_frame, text="Product Description Template:").pack(anchor=tk.W)
+        ttk.Label(desc_frame, text="Product Description Template:", font=("TkDefaultFont", 8)).pack(anchor=tk.W)
         default_desc = """High-quality {product_type} with custom {design} design.
-
-Features:
-- Premium material
-- Comfortable fit
-- Durable print
-- Available in multiple sizes and colors
-
-Size: {size}
-Color: {color}"""
+Features: Premium material, Comfortable fit, Durable print
+Size: {size} | Color: {color}"""
         
-        self.description_text = tk.Text(desc_frame, height=8, width=50)
-        self.description_text.pack(fill=tk.X, pady=5)
+        self.description_text = tk.Text(desc_frame, height=4, width=50, font=("TkDefaultFont", 8))
+        self.description_text.pack(fill=tk.X, pady=2)
         self.description_text.insert("1.0", default_desc)
 
-        # Save/Load Config Buttons
+        # Save/Load Config Buttons (compact)
         config_action_frame = ttk.Frame(shopify_config_frame)
-        config_action_frame.pack(fill=tk.X, pady=10)
+        config_action_frame.pack(fill=tk.X, pady=5)
         
-        self.save_shopify_config_button = ttk.Button(config_action_frame, text="Save Shopify Config")
+        self.save_shopify_config_button = ttk.Button(config_action_frame, text="Save Config")
         self.save_shopify_config_button.pack(side=tk.LEFT, padx=5)
         
-        self.load_shopify_config_button = ttk.Button(config_action_frame, text="Load Shopify Config") 
+        self.load_shopify_config_button = ttk.Button(config_action_frame, text="Load Config") 
         self.load_shopify_config_button.pack(side=tk.LEFT, padx=5)
         
         self.reset_shopify_config_button = ttk.Button(config_action_frame, text="Reset to Default")
