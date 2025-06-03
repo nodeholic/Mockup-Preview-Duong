@@ -159,7 +159,7 @@ class MainView(ttk.Frame):
         progress_frame.grid(row=5, column=0, padx=5, pady=(10,5), sticky=(tk.W, tk.E))
         
         self.progress_var = tk.DoubleVar()
-        self.progress_bar = ttk.Progressbar(progress_frame, variable=self.progress_var, maximum=100)
+        self.progress_bar = ttk.Progressbar(progress_frame, variable=self.progress_var, maximum=100, style="Green.Horizontal.TProgressbar")
         self.progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         
         self.progress_label = ttk.Label(progress_frame, text="0%", width=5)
@@ -313,7 +313,7 @@ Size: {size} | Color: {color}"""
         self.reset_shopify_config_button.pack(side=tk.LEFT, padx=5)
 
     def setup_styles(self):
-        """Thiết lập styles cho buttons"""
+        """Thiết lập styles cho buttons và progress bar"""
         style = ttk.Style(self.parent)
         
         available_themes = style.theme_names()
@@ -327,6 +327,14 @@ Size: {size} | Color: {color}"""
         style.configure("Accent.TButton", font=("TkDefaultFont", 10, "bold"), 
                         foreground="white", background="#28a745", 
                         padding=(10, 5))
+        
+        # Configure Green progress bar style
+        style.configure("Green.Horizontal.TProgressbar",
+                       background="#28a745",  # Màu xanh lá
+                       troughcolor="#e9ecef",  # Màu nền
+                       borderwidth=1,
+                       lightcolor="#28a745",
+                       darkcolor="#28a745")
 
     def set_controller(self, controller):
         self.controller = controller
