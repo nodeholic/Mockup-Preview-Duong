@@ -36,6 +36,9 @@ class MainController:
         
         self.view.output_folder_var.set(self.output_dir) # Đặt giá trị mặc định cho UI
 
+        # Dictionary để lưu mapping design -> handle cho session hiện tại
+        self.design_handle_mapping = {}
+
         self._setup_event_handlers()
         # Đảm bảo các thư mục này tồn tại khi khởi động
         os.makedirs(self.mockups_dir, exist_ok=True)
@@ -455,10 +458,39 @@ class MainController:
             self.view.show_error("Image Processing Error", f"Error fitting design {design_image_path}: {e}")
             return None
 
+    def generate_design_handle(self, design_name):
+        """Tạo handle cho design giống như trong CSV exporter - consistent trong session"""
+        design_base = os.path.splitext(design_name)[0]
+        
+        # Kiểm tra xem đã có handle cho design này chưa
+        if design_name in self.design_handle_mapping:
+            return self.design_handle_mapping[design_name], design_base
+        
+        # Tạo random string như trong CSV exporter để consistent
+        if hasattr(self, 'shopify_config'):
+            random_string = self.shopify_config.generate_random_string(10)
+        else:
+            # Fallback nếu chưa có shopify_config
+            import random
+            import string
+            random_string = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+        
+        handle = f"{design_base.lower().replace(' ', '-').replace('_', '-')}-{random_string}"
+        
+        # Lưu mapping để dùng lại
+        self.design_handle_mapping[design_name] = handle
+        
+        return handle, design_base
+
     def generate_single_image(self, mockup_name, design_name, output_folder):
         print(f"Generating image for Mockup: {mockup_name}, Design: {design_name}")
         mockup_path = os.path.join(self.mockups_dir, mockup_name)
         design_path = os.path.join(self.designs_dir, design_name)
+
+        # Tạo subfolder cho design
+        handle, design_base = self.generate_design_handle(design_name)
+        design_output_folder = os.path.join(output_folder, handle)
+        os.makedirs(design_output_folder, exist_ok=True)
 
         config = self.config_manager.get_mockup_config(mockup_name)
         if not config:
@@ -512,11 +544,14 @@ class MainController:
             elif image_to_save.mode != 'RGB':
                 image_to_save = image_to_save.convert("RGB")
 
-            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Sử dụng tên mockup gốc (giữ extension gốc)
             mockup_base = os.path.splitext(mockup_name)[0]
-            design_base = os.path.splitext(design_name)[0]
-            output_filename = f"{mockup_base}_{design_base}_{timestamp}.jpg"
-            output_path = os.path.join(output_folder, output_filename)
+            mockup_ext = os.path.splitext(mockup_name)[1]
+            
+            # Tên file = tên mockup gốc với extension JPG
+            output_filename = f"{mockup_base}.jpg"
+            # Lưu vào subfolder của design
+            output_path = os.path.join(design_output_folder, output_filename)
             
             # Lưu ảnh JPEG, không còn tham số quality từ view
             image_to_save.save(output_path, "JPEG") 
@@ -546,18 +581,18 @@ class MainController:
             self.view.show_error("Batch Generate Error", "No mockup files found.")
             if threaded: self.view.after(0, lambda: self.view.generate_button.config(state=tk.NORMAL))
             return
-
+        
         total_mockups = len(mockup_files)
         print(f"Starting batch generation for ALL {total_mockups} mockups with design '{design_name}'...")
         if threaded: self.view.update_progress(0)
-
+        
         success_count = 0
         processed_count = 0
         for i, mockup_name in enumerate(mockup_files):
             processed_count += 1
             current_progress = (processed_count / total_mockups) * 100
             print(f"Processing mockup {processed_count}/{total_mockups}: {mockup_name} ({current_progress:.2f}%)")
-
+            
             if self.generate_single_image(mockup_name, design_name, output_folder):
                 success_count += 1
             
@@ -684,10 +719,16 @@ class MainController:
                     # Generate tất cả combinations (silent mode)
                     self.generate_batch_all_combinations(output_folder, threaded=False, silent=True)
                     
-                    # Step 2: Export CSV
+                    # Step 2: Export CSV với handle mapping
                     mockup_files = self.get_generated_mockup_files(output_folder)
                     mockup_templates = self.get_mockup_templates()
-                    csv_path = self.csv_exporter.export_csv(design_names, mockup_files, output_folder, mockup_templates=mockup_templates)
+                    
+                    # Truyền design handle mapping cho CSV exporter để consistent
+                    csv_path = self.csv_exporter.export_csv(
+                        design_names, mockup_files, output_folder, 
+                        mockup_templates=mockup_templates,
+                        design_handle_mapping=self.design_handle_mapping
+                    )
                     
                     # Show final success message
                     summary = self.csv_exporter.get_export_summary(design_names)
@@ -740,9 +781,33 @@ class MainController:
             return [selected_design] if selected_design else []
 
     def get_generated_mockup_files(self, output_folder):
-        """Lấy danh sách file mockup đã generate trong output folder"""
+        """Lấy danh sách file mockup đã generate trong output folder (scan subfolders)"""
         try:
-            files = [f for f in os.listdir(output_folder) if f.lower().endswith(('.jpg', '.png'))]
+            files = []
+            
+            # Ưu tiên scan theo design handle mapping nếu có
+            if self.design_handle_mapping:
+                for design_name, handle in self.design_handle_mapping.items():
+                    design_folder = os.path.join(output_folder, handle)
+                    if os.path.isdir(design_folder):
+                        for file in os.listdir(design_folder):
+                            if file.lower().endswith(('.jpg', '.png')):
+                                # Tạo relative path: subfolder/filename
+                                files.append(f"{handle}/{file}")
+            else:
+                # Fallback: scan tất cả subfolders nếu không có mapping
+                for item in os.listdir(output_folder):
+                    item_path = os.path.join(output_folder, item)
+                    if os.path.isdir(item_path):
+                        # Scan files trong design subfolder
+                        for file in os.listdir(item_path):
+                            if file.lower().endswith(('.jpg', '.png')):
+                                # Tạo relative path: subfolder/filename
+                                files.append(f"{item}/{file}")
+                    elif item.lower().endswith(('.jpg', '.png')):
+                        # File ở root level (backward compatibility)
+                        files.append(item)
+            
             return files
         except:
             return []
@@ -774,8 +839,11 @@ class MainController:
             # Lấy mockup templates
             mockup_templates = self.get_mockup_templates()
             
-            # Preview data
-            preview_data = self.csv_exporter.preview_csv_data(design_names, mockup_files, output_folder, max_rows=5, mockup_templates=mockup_templates)
+            # Preview data với handle mapping
+            preview_data = self.csv_exporter.preview_csv_data(
+                design_names, mockup_files, output_folder, max_rows=5, 
+                mockup_templates=mockup_templates, design_handle_mapping=self.design_handle_mapping
+            )
             
             # Hiển thị preview window
             self.show_csv_preview_window(preview_data)
@@ -849,8 +917,11 @@ class MainController:
             # Lấy mockup templates
             mockup_templates = self.get_mockup_templates()
 
-            # Export CSV
-            csv_path = self.csv_exporter.export_csv(design_names, mockup_files, output_folder, mockup_templates=mockup_templates)
+            # Export CSV với handle mapping
+            csv_path = self.csv_exporter.export_csv(
+                design_names, mockup_files, output_folder, 
+                mockup_templates=mockup_templates, design_handle_mapping=self.design_handle_mapping
+            )
             
             # Hiển thị thống kê
             summary = self.csv_exporter.get_export_summary(design_names)

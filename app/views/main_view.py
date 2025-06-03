@@ -210,7 +210,7 @@ class MainView(ttk.Frame):
         self.image_domain_var = tk.StringVar(value="https://yourdomain.com/images")
         ttk.Entry(business_frame, textvariable=self.image_domain_var, width=30).grid(row=3, column=1, sticky=(tk.W, tk.E), padx=5, pady=2)
         
-        # Help text for image domain
+        # Help text for image domainn
         ttk.Label(business_frame, text="Base URL for product images", font=("TkDefaultFont", 8), foreground="gray").grid(row=4, column=1, sticky=tk.W, padx=5)
 
         business_frame.columnconfigure(1, weight=1)

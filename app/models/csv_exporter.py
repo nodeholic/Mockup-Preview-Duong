@@ -31,7 +31,8 @@ class ShopifyCSVExporter:
         ]
 
     def generate_product_data(self, design_name: str, mockup_files: List[str], 
-                            output_folder: str, mockup_templates: List[str] = None) -> List[Dict[str, Any]]:
+                            output_folder: str, mockup_templates: List[str] = None,
+                            design_handle_mapping: dict = None) -> List[Dict[str, Any]]:
         """Tạo dữ liệu sản phẩm cho một design - chỉ tạo variants cho sizes có price"""
         business_info = self.shopify_config.get_business_info()
         colors = self.shopify_config.get_colors()
@@ -45,11 +46,23 @@ class ShopifyCSVExporter:
         # Loại bỏ extension từ design name để làm handle
         design_base = os.path.splitext(design_name)[0]
         
-        # Tạo 1 random string cho product này và dùng chung cho tất cả variants
-        product_random_string = self.shopify_config.generate_random_string(10)
-        
-        # Handle bao gồm design name + random string để unique
-        handle = f"{design_base.lower().replace(' ', '-').replace('_', '-')}-{product_random_string}"
+        # Sử dụng handle từ mapping nếu có, nếu không thì tạo mới
+        if design_handle_mapping and design_name in design_handle_mapping:
+            handle = design_handle_mapping[design_name]
+            print(f"Using existing handle for {design_name}: {handle}")
+            # Extract random string từ handle để dùng cho SKU
+            # Handle format: "design-name-randomstring"
+            handle_parts = handle.split('-')
+            if len(handle_parts) >= 2:
+                product_random_string = handle_parts[-1]  # Lấy phần cuối
+            else:
+                # Fallback nếu format không đúng
+                product_random_string = self.shopify_config.generate_random_string(10)
+        else:
+            # Fallback: tạo random string mới
+            product_random_string = self.shopify_config.generate_random_string(10)
+            handle = f"{design_base.lower().replace(' ', '-').replace('_', '-')}-{product_random_string}"
+            print(f"Generated new handle for {design_name}: {handle}")
         
         # Tìm đúng images tương ứng với mockup templates cho design này
         image_domain = self.shopify_config.get_image_domain()
@@ -60,18 +73,27 @@ class ShopifyCSVExporter:
             for template in mockup_templates:
                 template_base = os.path.splitext(template)[0]  # Tên template không có extension
                 
-                # Tìm image file tương ứng trong output
+                # Tìm image file tương ứng trong output (có thể ở subfolder)
                 for mockup_file in mockup_files:
-                    # Check if this mockup file contains both template name and design name
-                    if (template_base.lower() in mockup_file.lower() and 
-                        design_base.lower() in mockup_file.lower()):
+                    # mockup_file có thể là "subfolder/filename.jpg" hoặc "filename.jpg"
+                    filename = os.path.basename(mockup_file)
+                    filename_base = os.path.splitext(filename)[0]
+                    
+                    # Check if this file name matches template name (since file name is now just mockup name)
+                    if template_base.lower() == filename_base.lower():
                         
                         # Tạo link ảnh với domain nếu có
                         if image_domain:
-                            filename = os.path.basename(mockup_file)
+                            # Chỉ lấy filename cho URL, không lấy subfolder path
                             image_url = f"{image_domain.rstrip('/')}/{filename}"
                         else:
-                            image_url = os.path.join(output_folder, mockup_file).replace("\\", "/")
+                            # Giữ full path cho local files
+                            if "/" in mockup_file:
+                                # File trong subfolder
+                                image_url = os.path.join(output_folder, mockup_file).replace("\\", "/")
+                            else:
+                                # File ở root
+                                image_url = os.path.join(output_folder, mockup_file).replace("\\", "/")
                         
                         matching_images.append(image_url)
                         break  # Chỉ lấy 1 image đầu tiên match cho template này
@@ -185,7 +207,7 @@ class ShopifyCSVExporter:
 
     def export_csv(self, design_names: List[str], mockup_files: List[str], 
                    output_folder: str, csv_filename: str = "shopify_products.csv",
-                   mockup_templates: List[str] = None) -> str:
+                   mockup_templates: List[str] = None, design_handle_mapping: dict = None) -> str:
         """Xuất CSV cho tất cả designs"""
         csv_path = os.path.join(output_folder, csv_filename)
         
@@ -196,7 +218,10 @@ class ShopifyCSVExporter:
                 writer.writeheader()
                 
                 for design_name in design_names:
-                    product_rows = self.generate_product_data(design_name, mockup_files, output_folder, mockup_templates)
+                    product_rows = self.generate_product_data(
+                        design_name, mockup_files, output_folder, 
+                        mockup_templates, design_handle_mapping
+                    )
                     for row in product_rows:
                         writer.writerow(row)
             
@@ -209,7 +234,7 @@ class ShopifyCSVExporter:
 
     def preview_csv_data(self, design_names: List[str], mockup_files: List[str], 
                         output_folder: str, max_rows: int = 10,
-                        mockup_templates: List[str] = None) -> List[Dict[str, Any]]:
+                        mockup_templates: List[str] = None, design_handle_mapping: dict = None) -> List[Dict[str, Any]]:
         """Xem trước dữ liệu CSV (để hiển thị trong UI)"""
         preview_data = []
         row_count = 0
@@ -218,7 +243,10 @@ class ShopifyCSVExporter:
             if row_count >= max_rows:
                 break
                 
-            product_rows = self.generate_product_data(design_name, mockup_files, output_folder, mockup_templates)
+            product_rows = self.generate_product_data(
+                design_name, mockup_files, output_folder, 
+                mockup_templates, design_handle_mapping
+            )
             for row in product_rows:
                 if row_count >= max_rows:
                     break
