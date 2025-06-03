@@ -84,8 +84,8 @@ class ShopifyCSVExporter:
                         
                         # Tạo link ảnh với domain nếu có
                         if image_domain:
-                            # Chỉ lấy filename cho URL, không lấy subfolder path
-                            image_url = f"{image_domain.rstrip('/')}/{filename}"
+                            # URL format: domain/handle/filename
+                            image_url = f"{image_domain.rstrip('/')}/{handle}/{filename}"
                         else:
                             # Giữ full path cho local files
                             if "/" in mockup_file:
