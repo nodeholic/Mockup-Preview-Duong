@@ -712,14 +712,15 @@ class MainController:
             # Chạy trong thread để không block UI
             def process_thread():
                 try:
-                    # Step 1: Generate mockups (silent mode - không alert)
-                    self.view.after(0, lambda: self.view.progress_bar.config(mode='indeterminate'))
-                    self.view.after(0, self.view.progress_bar.start)
+                    # Step 1: Generate mockups với progress tracking
+                    self.view.after(0, lambda: self.view.progress_bar.config(mode='determinate'))
+                    self.view.after(0, lambda: self.view.update_progress(0))
                     
-                    # Generate tất cả combinations (silent mode)
-                    self.generate_batch_all_combinations(output_folder, threaded=False, silent=True)
+                    # Generate tất cả combinations với progress updates
+                    self.generate_batch_all_combinations(output_folder, threaded=True, silent=True)
                     
                     # Step 2: Export CSV với handle mapping
+                    self.view.after(0, lambda: self.view.update_progress(95))
                     mockup_files = self.get_generated_mockup_files(output_folder)
                     mockup_templates = self.get_mockup_templates()
                     
@@ -729,6 +730,8 @@ class MainController:
                         mockup_templates=mockup_templates,
                         design_handle_mapping=self.design_handle_mapping
                     )
+                    
+                    self.view.after(0, lambda: self.view.update_progress(100))
                     
                     # Show final success message
                     summary = self.csv_exporter.get_export_summary(design_names)
@@ -741,9 +744,8 @@ class MainController:
                 finally:
                     # Re-enable buttons
                     self.view.after(0, lambda: self.view.generate_and_export_button.config(state=tk.NORMAL))
-                    self.view.after(0, self.view.progress_bar.stop)
                     self.view.after(0, lambda: self.view.progress_bar.config(mode='determinate'))
-                    self.view.after(0, self.view.reset_progress)
+                    self.view.after(100, self.view.reset_progress)
             
             # Start thread
             thread = threading.Thread(target=process_thread, daemon=True)

@@ -154,10 +154,16 @@ class MainView(ttk.Frame):
 
         # Removed duplicate Generate Image button (use Generate Mockups Only instead)
         
-        # --- Progress Bar ---
+        # --- Progress Bar với % label ---
+        progress_frame = ttk.Frame(left_panel)
+        progress_frame.grid(row=5, column=0, padx=5, pady=(10,5), sticky=(tk.W, tk.E))
+        
         self.progress_var = tk.DoubleVar()
-        self.progress_bar = ttk.Progressbar(left_panel, variable=self.progress_var, maximum=100)
-        self.progress_bar.grid(row=5, column=0, padx=5, pady=(10,5), sticky=(tk.W, tk.E))
+        self.progress_bar = ttk.Progressbar(progress_frame, variable=self.progress_var, maximum=100)
+        self.progress_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        
+        self.progress_label = ttk.Label(progress_frame, text="0%", width=5)
+        self.progress_label.pack(side=tk.RIGHT)
 
         # --- Right Panel (Preview) ---
         preview_frame = ttk.LabelFrame(self.tab1, text="Mockup Preview", padding="10")
@@ -548,8 +554,10 @@ Size: {size} | Color: {color}"""
 
     def update_progress(self, value):
         self.progress_var.set(value)
+        self.progress_label.config(text=f"{value:.0f}%")
         self.parent.update_idletasks() # Force UI update
 
     def reset_progress(self):
         self.progress_var.set(0)
+        self.progress_label.config(text="0%")
         self.parent.update_idletasks() 
